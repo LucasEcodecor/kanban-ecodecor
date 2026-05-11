@@ -9,7 +9,7 @@ import os
 # ==============================================================================
 st.set_page_config(
     page_title="ECO DECOR - Demanda diária",
-    page_icon="C:\Users\Seu Computador\OneDrive\Desktop\SISTEMA NUVEM\ECO TRANSPARENTE Logo Nova.png", 
+    page_icon="C:\Users\Seu Computador\OneDrive\Documentos\ECO TRANSPARENTE Logo Nova.png", 
     layout="centered"
 )
 
