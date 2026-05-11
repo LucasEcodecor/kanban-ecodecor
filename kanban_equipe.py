@@ -8,7 +8,7 @@ import os
 # 🎨 DESIGN E ESTILO
 # ==============================================================================
 st.set_page_config(
-    page_title="ECO DECOR - Kanban de Produção",
+    page_title="ECO DECOR - Demanda diária",
     page_icon="📋", 
     layout="centered"
 )
@@ -37,14 +37,14 @@ st.markdown("""
 ARQUIVO_BD = 'banco_demandas_kanban.json'
 
 ETAPAS_PRODUCAO = [
-    "ETIQUETAS (LUCAS/URIEL)",
-    "ARTE (TALLES)",
+    "ETIQUETAS (LUCAS)",
+    "ARTE (LUCAS/TALLES)",
     "IMPRESSÃO (TALLES)",
     "CORTE EM ANDAMENTO (DAVID)",
     "CORTE FINALIZADO (DAVID)",
     "PRODUÇÃO EM ANDAMENTO (SASKA)",
     "PRODUÇÃO FINALIZADO (SASKA)",
-    "NOTA FISCAL (URIEL)",
+    "NOTA FISCAL (MICHELLI)",
     "LIBERADO PARA ENTREGA (MICHELLI)"
 ]
 
