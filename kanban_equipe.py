@@ -9,7 +9,7 @@ import os
 # ==============================================================================
 st.set_page_config(
     page_title="ECO DECOR - Demanda diária",
-    page_icon=""C:\Users\Seu Computador\OneDrive\Desktop\SISTEMA NUVEM\ECO TRANSPARENTE Logo Nova.png"", 
+    page_icon="C:\Users\Seu Computador\OneDrive\Desktop\SISTEMA NUVEM\ECO TRANSPARENTE Logo Nova.png", 
     layout="centered"
 )
 
@@ -64,7 +64,7 @@ if 'modo_demanda' not in st.session_state:
 # ==============================================================================
 # 📋 INTERFACE DO KANBAN
 # ==============================================================================
-st.markdown("<h2 style='text-align: center;'>📋 ECO DECOR - Demanda diária </h2>", unsafe_allow_html=True)
+st.markdown("<h2 style='text-align: center;'>📋 ECO DECOR - Demanda diária</h2>", unsafe_allow_html=True)
 
 # Navegação de Datas
 nav1, nav2, nav3, nav4, nav5 = st.columns([1,1,2,1,1])
