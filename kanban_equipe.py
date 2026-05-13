@@ -85,30 +85,39 @@ def mover_demanda(d_atual, d_alvo, idx_atual, idx_alvo):
         st.error("Erro ao mover card.")
 
 # ==============================================================================
-# 📋 INTERFACE KANBAN E CABEÇALHO
+# 📋 INTERFACE KANBAN E CABEÇALHO CENTRALIZADO
 # ==============================================================================
 
-# Cria colunas, deixando a primeira bem estreitinha só para a logo
-col_logo, col_titulo = st.columns([1, 8], vertical_alignment="center")
+# Cria colunas com espaços vazios nas pontas (2 e 2) para "espremer" a logo e o título para o centro
+col_vazia_esq, col_logo, col_titulo, col_vazia_dir = st.columns([2, 1, 3, 2], vertical_alignment="center")
 
 with col_logo:
     try:
-        # Travamos a largura em 50 pixels para ficar do tamanho exato do texto
-        st.image("ECO TRANSPARENTE Logo Nova.png", width=50) 
+        # A logo no tamanho ideal para acompanhar o texto
+        st.image("ECO TRANSPARENTE Logo Nova.png", width=60) 
     except:
         st.write("🖼️") 
 
 with col_titulo:
-    st.markdown("<h2 style='margin: 0;'>DEMANDA DIÁRIA</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='margin: 0; text-align: left;'>DEMANDA DIÁRIA</h2>", unsafe_allow_html=True)
 
 st.write("---") # Linha divisória
 
-# Navegação de Datas
-nav1, nav2, nav3, nav4, nav5 = st.columns([1,1,2,1,1])
-if nav2.button("◀", key="btn_ant"): st.session_state.data_foco -= datetime.timedelta(days=1); st.rerun()
-nova_data = nav3.date_input("", value=st.session_state.data_foco, format="DD/MM/YYYY", label_visibility="collapsed")
-if nova_data != st.session_state.data_foco: st.session_state.data_foco = nova_data; st.rerun()
-if nav4.button("▶", key="btn_prox"): st.session_state.data_foco += datetime.timedelta(days=1); st.rerun()
+# Navegação de Datas (Também espremida para o centro com proporções [2, 1, 3, 1, 2])
+nav_espaco1, btn_ant, nav_data, btn_prox, nav_espaco2 = st.columns([2, 1, 3, 1, 2], vertical_alignment="center")
+
+if btn_ant.button("◀", key="btn_ant"): 
+    st.session_state.data_foco -= datetime.timedelta(days=1)
+    st.rerun()
+    
+nova_data = nav_data.date_input("", value=st.session_state.data_foco, format="DD/MM/YYYY", label_visibility="collapsed")
+if nova_data != st.session_state.data_foco: 
+    st.session_state.data_foco = nova_data
+    st.rerun()
+    
+if btn_prox.button("▶", key="btn_prox"): 
+    st.session_state.data_foco += datetime.timedelta(days=1)
+    st.rerun()
 
 st.divider()
 bd = carregar_bd()
@@ -234,7 +243,7 @@ elif st.session_state.modo_demanda in ['nova', 'editar']:
                     st.session_state.itens_temp = []
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Erro ao salvar: {e}")
+                    st.error(f"Erro ao guardar: {e}")
             else:
                 st.warning("⚠️ Preencha Nome, NF e adicione uma medida!")
 
