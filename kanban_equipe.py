@@ -54,19 +54,14 @@ if 'demanda_edit' not in st.session_state: st.session_state.demanda_edit = None
 # ==============================================================================
 def limpar_demandas_antigas():
     try:
-        # Calcula qual era a data de 5 dias atrás
         data_limite = datetime.date.today() - datetime.timedelta(days=5)
         data_limite_str = data_limite.strftime("%Y-%m-%d")
-        
-        # Manda o Supabase deletar tudo que for mais antigo (menor) que essa data limite
         supabase.table("demandas").delete().lt("data", data_limite_str).execute()
     except Exception as e:
-        pass # Se der algum erro na limpeza, ignora para não travar o sistema
+        pass
 
 def carregar_bd():
-    # Antes de carregar os dados para a tela, roda a faxina!
     limpar_demandas_antigas()
-    
     try:
         resposta = supabase.table("demandas").select("*").execute()
         bd_organizado = {}
@@ -79,24 +74,27 @@ def carregar_bd():
         return {}
 
 def mover_demanda(d_atual, d_alvo, idx_atual, idx_alvo):
-    # Pega a ordem atual ou usa o índice como base
     ordem_atual = d_atual.get('ordem') if d_atual.get('ordem') is not None else idx_atual
     ordem_alvo = d_alvo.get('ordem') if d_alvo.get('ordem') is not None else idx_alvo
-    
-    if ordem_atual == ordem_alvo:
-        ordem_atual, ordem_alvo = idx_atual, idx_alvo
-
+    if ordem_atual == ordem_alvo: ordem_atual, ordem_alvo = idx_atual, idx_alvo
     try:
         supabase.table("demandas").update({"ordem": ordem_alvo}).eq("id", d_atual['id']).execute()
         supabase.table("demandas").update({"ordem": ordem_atual}).eq("id", d_alvo['id']).execute()
         st.rerun()
     except Exception as e:
-        st.error("⚠️ Para mover os cards, vá no Supabase e crie a coluna 'ordem' (tipo int4) na tabela 'demandas'.")
+        st.error("Erro ao mover card.")
 
 # ==============================================================================
 # 📋 INTERFACE KANBAN
 # ==============================================================================
 st.markdown("<h2 style='text-align: center;'>📋 DEMANDA ECO DECOR</h2>", unsafe_allow_html=True)
+
+# --- LINHA DA NOVA LOGO ---
+try:
+    st.image("ECO TRANSPARENTE Logo Nova.png", use_container_width=True) 
+except:
+    st.warning("⚠️ Imagem 'ECO TRANSPARENTE Logo Nova.png' não encontrada no GitHub.")
+# ----------------------------
 
 nav1, nav2, nav3, nav4, nav5 = st.columns([1,1,2,1,1])
 if nav2.button("◀", key="btn_ant"): st.session_state.data_foco -= datetime.timedelta(days=1); st.rerun()
@@ -112,7 +110,6 @@ data_str = st.session_state.data_foco.strftime("%Y-%m-%d")
 # MODO: LISTA
 # ------------------------------------------------------------------------------
 if st.session_state.modo_demanda == 'lista':
-    
     if st.button("➕ ADICIONAR NOVA DEMANDA"):
         st.session_state.modo_demanda = 'nova'
         st.session_state.itens_temp = []
@@ -121,7 +118,6 @@ if st.session_state.modo_demanda == 'lista':
 
     st.write("---")
     demandas_do_dia = bd.get(data_str, [])
-    # Ordena as demandas pela coluna "ordem" (se não existir, usa o id)
     demandas_do_dia.sort(key=lambda x: (x.get('ordem', 999), x['id']))
 
     if not demandas_do_dia:
@@ -136,7 +132,6 @@ if st.session_state.modo_demanda == 'lista':
             elif marcadas == total: status_html = "<span class='status-badge finalizado'>🟢 FINALIZADO</span>"
             else: status_html = f"<span class='status-badge andamento'>🟡 ANDAMENTO ({marcadas}/{total})</span>"
 
-            # Formata o título com as medidas
             medidas_str = ""
             if isinstance(d['itens'], list) and len(d['itens']) > 0:
                 medidas_str = " - " + " | ".join([f"{it['qtd']}x {it['tam']}" for it in d['itens']])
@@ -147,10 +142,8 @@ if st.session_state.modo_demanda == 'lista':
 
             with st.expander(titulo_expander):
                 st.markdown(f"{status_html}", unsafe_allow_html=True)
-                
                 if d.get('agendamento'): st.write(f"📅 **Agendado para:** {d['agendamento']}")
                 if d.get('referencia'): st.write(f"📝 **Referência:** {d['referencia']}")
-                
                 st.write("---")
                 st.markdown("### ✅ CHECKLIST")
                 
@@ -169,20 +162,16 @@ if st.session_state.modo_demanda == 'lista':
                 st.write("---")
                 st.markdown("### ⚙️ AÇÕES")
                 c1, c2, c3, c4 = st.columns(4)
-                
                 if c1.button("✏️ Editar", key=f"ed_{d['id']}"):
                     st.session_state.modo_demanda = 'editar'
                     st.session_state.demanda_edit = d
                     st.session_state.itens_temp = d['itens'] if isinstance(d['itens'], list) else []
                     st.rerun()
-                    
                 if c2.button("🗑️ Excluir", key=f"del_{d['id']}"):
                     supabase.table("demandas").delete().eq("id", d['id']).execute()
                     st.rerun()
-                    
                 if c3.button("⬆️ Subir", key=f"up_{d['id']}"):
                     if idx > 0: mover_demanda(d, demandas_do_dia[idx-1], idx, idx-1)
-                        
                 if c4.button("⬇️ Descer", key=f"down_{d['id']}"):
                     if idx < len(demandas_do_dia) - 1: mover_demanda(d, demandas_do_dia[idx+1], idx, idx+1)
 
@@ -192,16 +181,13 @@ if st.session_state.modo_demanda == 'lista':
 elif st.session_state.modo_demanda in ['nova', 'editar']:
     is_edit = st.session_state.modo_demanda == 'editar'
     d_edit = st.session_state.demanda_edit if is_edit else {}
-    
     st.write(f"### {'✏️ Editar Demanda' if is_edit else '➕ Nova Demanda'}")
     
     with st.container(border=True):
         cli_d = st.text_input("Nome do cliente:", value=d_edit.get('cliente', '')).strip().upper()
         nf_d = st.text_input("Número da NF:", value=d_edit.get('nf', '')).strip().upper()
+        st.write("📦 **ITENS DA DEMANDA:**")
         
-        st.write("📦 **ITENS DA DEMANDA (MEDIDAS E QUANTIDADES):**")
-        
-        # Mostra itens adicionados
         for i, item in enumerate(st.session_state.itens_temp):
             c_it1, c_it2 = st.columns([4, 1])
             c_it1.write(f"• **{item['qtd']}** unidades de **{item['tam']}**")
@@ -209,7 +195,6 @@ elif st.session_state.modo_demanda in ['nova', 'editar']:
                 st.session_state.itens_temp.pop(i)
                 st.rerun()
                 
-        # Adicionar novo item
         st.write("---")
         c_m1, c_m2, c_m3 = st.columns([2, 2, 2])
         t_med = c_m1.selectbox("Medida:", ["30x40", "60x40", "90x60"])
@@ -219,38 +204,31 @@ elif st.session_state.modo_demanda in ['nova', 'editar']:
             st.rerun()
 
         st.write("---")
-        txt_agend = st.text_input("Agendamento (Opcional):", value=d_edit.get('agendamento', '')).strip().upper()
-        txt_ref = st.text_area("Referência Específica (Opcional):", value=d_edit.get('referencia', '')).strip().upper()
+        txt_agend = st.text_input("Agendamento:", value=d_edit.get('agendamento', '')).strip().upper()
+        txt_ref = st.text_area("Referência:", value=d_edit.get('referencia', '')).strip().upper()
         
-        st.write("---")
         c_salvar, c_voltar = st.columns(2)
-        
         if c_salvar.button("✅ SALVAR NA NUVEM"):
             if cli_d and nf_d and len(st.session_state.itens_temp) > 0:
                 dados = {
                     "data": st.session_state.data_foco.strftime("%Y-%m-%d") if not is_edit else d_edit['data'],
-                    "cliente": cli_d,
-                    "nf": nf_d,
-                    "itens": st.session_state.itens_temp,
-                    "agendamento": txt_agend,
-                    "referencia": txt_ref,
+                    "cliente": cli_d, "nf": nf_d, "itens": st.session_state.itens_temp,
+                    "agendamento": txt_agend, "referencia": txt_ref,
                 }
-                
                 try:
                     if is_edit:
                         supabase.table("demandas").update(dados).eq("id", d_edit['id']).execute()
                     else:
                         dados["etapas"] = {etapa: False for etapa in ETAPAS_PRODUCAO}
-                        dados["ordem"] = 999 # Coloca no final da lista por padrão
+                        dados["ordem"] = 999
                         supabase.table("demandas").insert(dados).execute()
-                        
                     st.session_state.modo_demanda = 'lista'
                     st.session_state.itens_temp = []
                     st.rerun()
                 except Exception as e:
                     st.error(f"Erro ao salvar: {e}")
             else:
-                st.warning("⚠️ Preencha o Nome, a NF e adicione pelo menos UMA medida na lista!")
+                st.warning("⚠️ Preencha Nome, NF e adicione uma medida!")
 
         if c_voltar.button("❌ VOLTAR"):
             st.session_state.modo_demanda = 'lista'
