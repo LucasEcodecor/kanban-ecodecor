@@ -3,6 +3,8 @@ import datetime
 import math
 import io
 import zipfile
+import os
+import urllib.request
 from supabase import create_client, Client
 from PIL import Image, ImageDraw, ImageFont
 import barcode
@@ -35,17 +37,11 @@ st.markdown("""
 CODIGOS_BARRA = {"30x40": "17908843201175", "60x40": "17908843201168", "90x60": "17908843201151"}
 
 def obter_capacidade(cliente, tam):
-    """Calcula a capacidade da caixa dependendo se é cliente normal ou bigodinho"""
     cli_upper = str(cliente).upper()
-    # Verifica se é um pedido dos representantes (bigodinho)
     is_bigodinho = any(palavra in cli_upper for palavra in ["BIGODINHO", "LUCAS", "JIMMY", "REP"])
-    
-    if tam == "90x60":
-        return 10 if is_bigodinho else 11
-    elif tam == "60x40":
-        return 24
-    elif tam == "30x40":
-        return 50
+    if tam == "90x60": return 10 if is_bigodinho else 11
+    elif tam == "60x40": return 24
+    elif tam == "30x40": return 50
     return 1
 
 # ==============================================================================
@@ -66,7 +62,6 @@ ETAPAS_PRODUCAO = [
     "NOTA FISCAL (MICHELLI)", "LIBERADO PARA ENTREGA (MICHELLI)"
 ]
 
-# Variáveis de Estado
 if 'data_foco' not in st.session_state: st.session_state.data_foco = datetime.date.today() + datetime.timedelta(days=1)
 if 'modo_demanda' not in st.session_state: st.session_state.modo_demanda = 'lista'
 if 'itens_temp' not in st.session_state: st.session_state.itens_temp = []
@@ -105,66 +100,113 @@ def mover_demanda(d_atual, d_alvo, idx_atual, idx_alvo):
         st.rerun()
     except: st.error("Erro ao mover card.")
 
-# --- GERADOR DE ETIQUETAS NA MEMÓRIA (FORMATO GRANDE E NEGRITO) ---
-def obter_fonte(tamanho):
-    # Tenta carregar fontes negritadas do Linux (servidor Streamlit)
-    fontes_tentativas = ["arialbd.ttf", "DejaVuSans-Bold.ttf", "LiberationSans-Bold.ttf", "FreeSansBold.ttf", "arial.ttf"]
-    for f in fontes_tentativas:
-        try: return ImageFont.truetype(f, tamanho)
+# --- GERADOR DE ETIQUETAS NA MEMÓRIA ---
+def obter_fonte_grossa(tamanho):
+    """Baixa uma fonte grossa se não existir na nuvem"""
+    caminho_fonte = "Roboto-Black.ttf"
+    if not os.path.exists(caminho_fonte):
+        try:
+            url = "https://github.com/google/fonts/raw/main/ofl/roboto/Roboto-Black.ttf"
+            urllib.request.urlretrieve(url, caminho_fonte)
         except: pass
-    return ImageFont.load_default()
+        
+    try: return ImageFont.truetype(caminho_fonte, tamanho)
+    except: 
+        try: return ImageFont.truetype("arialbd.ttf", tamanho)
+        except: return ImageFont.load_default()
 
 def gerar_etiqueta_memoria(cliente, nf, tam, padrao_un):
     img = Image.new('RGB', (1000, 1600), 'white')
     draw = ImageDraw.Draw(img)
     
-    # Fontes com tamanhos gigantes e Stroke para simular Negrito extra
-    f_nf = obter_fonte(140)
-    f_cli = obter_fonte(85)
-    f_quadro = obter_fonte(75)
-    f_contem = obter_fonte(120)
-    f_codigo = obter_fonte(80)
+    cli_upper = str(cliente).upper().strip()
+    is_lucas = "LUCAS" in cli_upper
+    is_jimmy = "JIMMY" in cli_upper
+    is_bigodinho = is_lucas or is_jimmy or "BIGODINHO" in cli_upper or "REP" in cli_upper
 
-    # NF - Topo Gigante
-    draw.text((500, 150), f"NF {nf}", font=f_nf, fill="black", anchor="mm", stroke_width=2)
-    
-    # Nome do Cliente - Quebra de linha inteligente
-    texto_cli = str(cliente).upper().strip()
-    linhas, linha_atual = [], ""
-    for palavra in texto_cli.split():
-        teste_linha = f"{linha_atual} {palavra}".strip()
-        try: w = draw.textlength(teste_linha, font=f_cli)
-        except: w = draw.textsize(teste_linha, font=f_cli)[0]
+    if is_bigodinho:
+        # ===============================================================
+        # LAYOUT REPRESENTANTES (BIGODINHO) - IGUAL A IMAGEM DE REFERÊNCIA
+        # ===============================================================
+        f_nf = obter_fonte_grossa(180)
+        f_infos = obter_fonte_grossa(80)
+        f_quadro = obter_fonte_grossa(60)
+        f_codigo = obter_fonte_grossa(50)
+        f_contem = obter_fonte_grossa(90)
+
+        # NF Gigante
+        draw.text((500, 150), f"NF {nf}", font=f_nf, fill="black", anchor="mm")
         
-        if w <= 900: linha_atual = teste_linha
-        else:
-            if linha_atual: linhas.append(linha_atual)
-            linha_atual = palavra
-    if linha_atual: linhas.append(linha_atual)
+        # CNPJ e SKU Alinhados a esquerda
+        cnpj = "49.657.733/0001-92" if is_lucas else "30.514.229/0001-05" if is_jimmy else ""
+        draw.text((75, 350), f"CNPJ:{cnpj}", font=f_infos, fill="black", anchor="lm")
+        draw.text((75, 450), "SKU:", font=f_infos, fill="black", anchor="lm")
 
-    # Imprime o cliente centralizado
-    y_inicial_cli = 350
-    for i, linha in enumerate(linhas[:4]):
-        draw.text((500, y_inicial_cli + (i * 100)), linha, font=f_cli, fill="black", anchor="mm", stroke_width=1)
-
-    # Medida
-    draw.text((500, 780), f"Quadro Decorativo {tam}cm", font=f_quadro, fill="black", anchor="mm", stroke_width=1)
-    
-    # Código de Barras
-    try:
-        EAN = barcode.get_barcode_class('code128')
-        rv = io.BytesIO()
-        EAN(CODIGOS_BARRA.get(tam, "0000000000000"), writer=ImageWriter()).write(rv, options={"write_text": False, "module_height": 20.0})
-        rv.seek(0)
-        bc_img = Image.open(rv).resize((850, 380)) 
-        img.paste(bc_img, (75, 880))
+        # Quadro Decorativo
+        draw.text((500, 950), f"Quadro Decorativo {tam}cm", font=f_quadro, fill="black", anchor="mm")
         
-        # Número do código embaixo
-        draw.text((500, 1320), CODIGOS_BARRA.get(tam, "0000000000000"), font=f_codigo, fill="black", anchor="mm", stroke_width=1)
-    except: pass
-    
-    # Contém X unidades
-    draw.text((500, 1500), f"Contém {padrao_un} unidades", font=f_contem, fill="black", anchor="mm", stroke_width=2)
+        # Código de Barras com Borda Grossa
+        try:
+            EAN = barcode.get_barcode_class('code128')
+            rv = io.BytesIO()
+            EAN(CODIGOS_BARRA.get(tam, "0000000000000"), writer=ImageWriter()).write(rv, options={"write_text": False, "module_height": 18.0})
+            rv.seek(0)
+            bc_img = Image.open(rv).resize((850, 250)) 
+            img.paste(bc_img, (75, 1000))
+            
+            # Desenha a borda preta em volta do código
+            draw.rectangle([75, 1000, 75+850, 1000+250], outline="black", width=20)
+            
+            # Números espaçados
+            codigo = CODIGOS_BARRA.get(tam, "0000000000000")
+            codigo_espacado = "   ".join(list(codigo))
+            draw.text((500, 1310), codigo_espacado, font=f_codigo, fill="black", anchor="mm")
+        except: pass
+        
+        # Contém
+        draw.text((500, 1480), f"Contém {padrao_un} unidades", font=f_contem, fill="black", anchor="mm")
+
+    else:
+        # ===============================================================
+        # LAYOUT CLIENTE NORMAL (Centralizado)
+        # ===============================================================
+        f_nf = obter_fonte_grossa(140)
+        f_cli = obter_fonte_grossa(85)
+        f_quadro = obter_fonte_grossa(75)
+        f_codigo = obter_fonte_grossa(80)
+        f_contem = obter_fonte_grossa(120)
+
+        draw.text((500, 150), f"NF {nf}", font=f_nf, fill="black", anchor="mm")
+        
+        linhas, linha_atual = [], ""
+        for palavra in cli_upper.split():
+            teste_linha = f"{linha_atual} {palavra}".strip()
+            try: w = draw.textlength(teste_linha, font=f_cli)
+            except: w = draw.textsize(teste_linha, font=f_cli)[0]
+            
+            if w <= 900: linha_atual = teste_linha
+            else:
+                if linha_atual: linhas.append(linha_atual)
+                linha_atual = palavra
+        if linha_atual: linhas.append(linha_atual)
+
+        y_inicial_cli = 350
+        for i, linha in enumerate(linhas[:4]):
+            draw.text((500, y_inicial_cli + (i * 100)), linha, font=f_cli, fill="black", anchor="mm")
+
+        draw.text((500, 780), f"Quadro Decorativo {tam}cm", font=f_quadro, fill="black", anchor="mm")
+        
+        try:
+            EAN = barcode.get_barcode_class('code128')
+            rv = io.BytesIO()
+            EAN(CODIGOS_BARRA.get(tam, "0000000000000"), writer=ImageWriter()).write(rv, options={"write_text": False, "module_height": 20.0})
+            rv.seek(0)
+            bc_img = Image.open(rv).resize((850, 380)) 
+            img.paste(bc_img, (75, 880))
+            draw.text((500, 1320), CODIGOS_BARRA.get(tam, "0000000000000"), font=f_codigo, fill="black", anchor="mm")
+        except: pass
+        
+        draw.text((500, 1500), f"Contém {padrao_un} unidades", font=f_contem, fill="black", anchor="mm")
     
     img_byte_arr = io.BytesIO()
     img.save(img_byte_arr, format='JPEG', quality=100)
@@ -196,10 +238,7 @@ data_str = st.session_state.data_foco.strftime("%Y-%m-%d")
 # ------------------------------------------------------------------------------
 if st.session_state.modo_demanda == 'lista':
     if st.button("➕ ADICIONAR NOVA DEMANDA"):
-        st.session_state.modo_demanda = 'nova'
-        st.session_state.itens_temp = []
-        st.session_state.demanda_edit = None
-        st.rerun()
+        st.session_state.modo_demanda = 'nova'; st.session_state.itens_temp = []; st.session_state.demanda_edit = None; st.rerun()
 
     st.write("---")
     demandas_do_dia = bd.get(data_str, [])
@@ -211,20 +250,11 @@ if st.session_state.modo_demanda == 'lista':
         for idx, d in enumerate(demandas_do_dia):
             etapas = d.get('etapas', {})
             marcadas = sum(1 for v in etapas.values() if v)
-            total = len(ETAPAS_PRODUCAO)
+            status_html = f"<span class='status-badge {'finalizado' if marcadas==len(ETAPAS_PRODUCAO) else 'andamento' if marcadas>0 else 'pendente'}'>{'🟢' if marcadas==len(ETAPAS_PRODUCAO) else '🟡' if marcadas>0 else '🔴'} {marcadas}/{len(ETAPAS_PRODUCAO)}</span>"
+            medidas_str = " - " + " | ".join([f"{it['qtd']}x {it['tam']}" for it in d['itens']])
             
-            if marcadas == 0: status_html = "<span class='status-badge pendente'>🔴 PENDENTE</span>"
-            elif marcadas == total: status_html = "<span class='status-badge finalizado'>🟢 FINALIZADO</span>"
-            else: status_html = f"<span class='status-badge andamento'>🟡 ANDAMENTO ({marcadas}/{total})</span>"
-
-            medidas_str = ""
-            if isinstance(d['itens'], list) and len(d['itens']) > 0:
-                medidas_str = " - " + " | ".join([f"{it['qtd']}x {it['tam']}" for it in d['itens']])
-            
-            titulo_expander = f"{d['cliente']} - NF: {d['nf']}{medidas_str}"
-
-            with st.expander(titulo_expander):
-                st.markdown(f"{status_html}", unsafe_allow_html=True)
+            with st.expander(f"{d['cliente']} - NF: {d['nf']}{medidas_str}"):
+                st.markdown(status_html, unsafe_allow_html=True)
                 st.write("") 
                 
                 st.markdown(f"**Cliente:** {d['cliente']} &nbsp;|&nbsp; **NF:** {d['nf']}")
@@ -232,9 +262,7 @@ if st.session_state.modo_demanda == 'lista':
                     st.markdown("**📦 Medidas:**")
                     for it in d['itens']:
                         tam, qtd = it['tam'], int(it['qtd'])
-                        # CHAMA A FUNÇÃO INTELIGENTE AQUI!
                         cap = obter_capacidade(d['cliente'], tam)
-                        
                         caixas = math.ceil(qtd / cap)
                         txt_cx = "caixa" if caixas == 1 else "caixas"
                         st.markdown(f"- **{tam}** - {qtd} un - **{caixas} {txt_cx}** *(Cap: {cap}/cx)*")
@@ -243,40 +271,24 @@ if st.session_state.modo_demanda == 'lista':
                 if d.get('referencia'): st.write(f"📝 **Referência:** {d['referencia']}")
                 
                 st.write("---")
-                st.markdown("### ✅ CHECKLIST")
-                
                 mudou_algo = False
                 for i, etapa in enumerate(ETAPAS_PRODUCAO):
-                    valor_atual = etapas.get(etapa, False)
-                    novo_valor = st.checkbox(etapa, value=valor_atual, key=f"chk_{d['id']}_{i}")
-                    if novo_valor != valor_atual:
-                        etapas[etapa] = novo_valor
-                        mudou_algo = True
-                
-                if mudou_algo:
-                    supabase.table("demandas").update({"etapas": etapas}).eq("id", d['id']).execute()
-                    st.rerun()
+                    v = st.checkbox(etapa, value=etapas.get(etapa, False), key=f"c{d['id']}{i}")
+                    if v != etapas.get(etapa, False): etapas[etapa] = v; mudou_algo = True
+                if mudou_algo: supabase.table("demandas").update({"etapas": etapas}).eq("id", d['id']).execute(); st.rerun()
 
                 st.write("---")
-                st.markdown("### ⚙️ AÇÕES")
                 c1, c2, c3, c4, c5 = st.columns(5)
                 if c1.button("✏️ Editar", key=f"ed_{d['id']}"):
-                    st.session_state.modo_demanda = 'editar'
-                    st.session_state.demanda_edit = d
-                    st.session_state.itens_temp = d['itens'] if isinstance(d['itens'], list) else []
-                    st.rerun()
+                    st.session_state.modo_demanda = 'editar'; st.session_state.demanda_edit = d; st.session_state.itens_temp = d['itens'] if isinstance(d['itens'], list) else []; st.rerun()
                 if c2.button("🗑️ Excluir", key=f"del_{d['id']}"):
-                    supabase.table("demandas").delete().eq("id", d['id']).execute()
-                    st.rerun()
+                    supabase.table("demandas").delete().eq("id", d['id']).execute(); st.rerun()
                 if c3.button("⬆️ Subir", key=f"up_{d['id']}"):
                     if idx > 0: mover_demanda(d, demandas_do_dia[idx-1], idx, idx-1)
                 if c4.button("⬇️ Descer", key=f"down_{d['id']}"):
                     if idx < len(demandas_do_dia) - 1: mover_demanda(d, demandas_do_dia[idx+1], idx, idx+1)
-                
                 if c5.button("🏷️ Etiquetas", key=f"etq_{d['id']}"):
-                    st.session_state.demanda_etiqueta = d
-                    st.session_state.modo_demanda = 'etiquetas'
-                    st.rerun()
+                    st.session_state.demanda_etiqueta = d; st.session_state.modo_demanda = 'etiquetas'; st.rerun()
 
 # ------------------------------------------------------------------------------
 # MODO: GERADOR DE ETIQUETAS
@@ -292,9 +304,7 @@ elif st.session_state.modo_demanda == 'etiquetas':
         
         for it in d.get('itens', []):
             tam, qtd = it['tam'], int(it['qtd'])
-            # CHAMA A FUNÇÃO INTELIGENTE AQUI!
             cap = obter_capacidade(d['cliente'], tam)
-            
             st.write(f"- {tam} ({qtd} un) - *{cap} por caixa*")
             lista_geracao.append({'tam': tam, 'cap': cap})
             
@@ -308,7 +318,6 @@ elif st.session_state.modo_demanda == 'etiquetas':
                 
                 with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
                     for item in lista_geracao:
-                        # GERA APENAS UMA ETIQUETA POR MEDIDA COM A CAPACIDADE CORRETA
                         img_byte_arr = gerar_etiqueta_memoria(d['cliente'], d['nf'], item['tam'], item['cap'])
                         nome_arquivo = f"NF_{d['nf']}_{nome_sanitizado}_{item['tam']}.jpg"
                         zip_file.writestr(nome_arquivo, img_byte_arr.getvalue())
@@ -319,18 +328,11 @@ elif st.session_state.modo_demanda == 'etiquetas':
                 st.success("✅ Etiquetas prontas para download!")
         
         if 'zip_pronto' in st.session_state:
-            st.download_button(
-                label="📥 BAIXAR ETIQUETAS (.ZIP)",
-                data=st.session_state.zip_pronto,
-                file_name=st.session_state.zip_nome,
-                mime="application/zip",
-                use_container_width=True
-            )
+            st.download_button("📥 BAIXAR ETIQUETAS (.ZIP)", data=st.session_state.zip_pronto, file_name=st.session_state.zip_nome, mime="application/zip", use_container_width=True)
 
     if st.button("❌ VOLTAR AO PAINEL"):
         if 'zip_pronto' in st.session_state: del st.session_state['zip_pronto']
-        st.session_state.modo_demanda = 'lista'
-        st.rerun()
+        st.session_state.modo_demanda = 'lista'; st.rerun()
 
 # ------------------------------------------------------------------------------
 # MODO: NOVA OU EDITAR DEMANDA
@@ -367,11 +369,7 @@ elif st.session_state.modo_demanda in ['nova', 'editar']:
         c_salvar, c_voltar = st.columns(2)
         if c_salvar.button("✅ SALVAR NA NUVEM"):
             if cli_d and nf_d and len(st.session_state.itens_temp) > 0:
-                dados = {
-                    "data": st.session_state.data_foco.strftime("%Y-%m-%d") if not is_edit else d_edit['data'],
-                    "cliente": cli_d, "nf": nf_d, "itens": st.session_state.itens_temp,
-                    "agendamento": txt_agend, "referencia": txt_ref,
-                }
+                dados = {"data": st.session_state.data_foco.strftime("%Y-%m-%d") if not is_edit else d_edit['data'], "cliente": cli_d, "nf": nf_d, "itens": st.session_state.itens_temp, "agendamento": txt_agend, "referencia": txt_ref}
                 try:
                     if is_edit: supabase.table("demandas").update(dados).eq("id", d_edit['id']).execute()
                     else:
