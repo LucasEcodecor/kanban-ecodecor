@@ -2,12 +2,12 @@ import streamlit as st
 import datetime
 import json
 import os
+import math # <-- Nova biblioteca para arredondar o cálculo das caixas
 from supabase import create_client, Client
 
 # ==============================================================================
-# 🎨 DESIGN E ESTILO (AGORA COM A LOGO NO ÍCONE DA PÁGINA)
+# 🎨 DESIGN E ESTILO
 # ==============================================================================
-# Alterado o page_icon para a imagem da logo
 st.set_page_config(page_title="ECO DECOR - Demanda diária", page_icon="ECO TRANSPARENTE Logo Nova.png", layout="centered")
 
 st.markdown("""
@@ -88,23 +88,17 @@ def mover_demanda(d_atual, d_alvo, idx_atual, idx_alvo):
 # ==============================================================================
 # 📋 INTERFACE KANBAN E CABEÇALHO CENTRALIZADO
 # ==============================================================================
-
-# Cria 3 colunas para centralizar perfeitamente a imagem no topo
 c_esq, c_meio, c_dir = st.columns([1, 2, 1])
 
 with c_meio:
     try:
-        # AQUI VAI A IMAGEM NOVA!
         st.image("ECO TRANSPARENTE Logo Nova PNG.png", use_container_width=True) 
     except:
         st.markdown("<h2 style='text-align: center;'>ECO DECOR</h2>", unsafe_allow_html=True)
 
-# Título centralizado abaixo da logo
 st.markdown("<h2 style='text-align: center; margin-top: -15px;'>DEMANDA DIÁRIA</h2>", unsafe_allow_html=True)
+st.write("---")
 
-st.write("---") # Linha divisória
-
-# Navegação de Datas (Centralizada)
 nav_espaco1, btn_ant, nav_data, btn_prox, nav_espaco2 = st.columns([2, 1, 3, 1, 2], vertical_alignment="center")
 
 if btn_ant.button("◀", key="btn_ant"): 
@@ -150,6 +144,7 @@ if st.session_state.modo_demanda == 'lista':
             elif marcadas == total: status_html = "<span class='status-badge finalizado'>🟢 FINALIZADO</span>"
             else: status_html = f"<span class='status-badge andamento'>🟡 ANDAMENTO ({marcadas}/{total})</span>"
 
+            # Título Visível (Antes de Clicar)
             medidas_str = ""
             if isinstance(d['itens'], list) and len(d['itens']) > 0:
                 medidas_str = " - " + " | ".join([f"{it['qtd']}x {it['tam']}" for it in d['itens']])
@@ -160,8 +155,35 @@ if st.session_state.modo_demanda == 'lista':
 
             with st.expander(titulo_expander):
                 st.markdown(f"{status_html}", unsafe_allow_html=True)
-                if d.get('agendamento'): st.write(f"📅 **Agendado para:** {d['agendamento']}")
+                st.write("") # Espaço extra
+                
+                # --- NOVO BLOCO INTERNO (MEDIDAS E CAIXAS) ---
+                st.markdown(f"**Cliente:** {d['cliente']} &nbsp;|&nbsp; **NF:** {d['nf']}")
+                
+                if isinstance(d['itens'], list) and len(d['itens']) > 0:
+                    st.markdown("**📦 Medidas:**")
+                    for it in d['itens']:
+                        tamanho = it['tam']
+                        quantidade = int(it['qtd'])
+                        
+                        # Cálculo inteligente de caixas
+                        if tamanho == "90x60": capacidade = 11
+                        elif tamanho == "60x40": capacidade = 24
+                        elif tamanho == "30x40": capacidade = 50
+                        else: capacidade = 1 # Segurança caso inventem outra medida no futuro
+                        
+                        caixas = math.ceil(quantidade / capacidade)
+                        txt_cx = "caixa" if caixas == 1 else "caixas"
+                        
+                        st.markdown(f"- **{tamanho}** - {quantidade} un - **{caixas} {txt_cx}**")
+                elif isinstance(d['itens'], str):
+                    st.write(f"- {d['itens']}")
+
+                st.write("") # Espaço extra
+                if d.get('agendamento'): st.write(f"📅 **Agendamento:** {d['agendamento']}")
                 if d.get('referencia'): st.write(f"📝 **Referência:** {d['referencia']}")
+                # ---------------------------------------------
+                
                 st.write("---")
                 st.markdown("### ✅ CHECKLIST")
                 
