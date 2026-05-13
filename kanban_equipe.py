@@ -32,8 +32,21 @@ st.markdown("""
 # ==============================================================================
 # ⚙️ CONFIGURAÇÕES DE ETIQUETAS E CAIXAS
 # ==============================================================================
-CONTEUDO_POR_CAIXA = {"30x40": 50, "60x40": 24, "90x60": 10}
 CODIGOS_BARRA = {"30x40": "17908843201175", "60x40": "17908843201168", "90x60": "17908843201151"}
+
+def obter_capacidade(cliente, tam):
+    """Calcula a capacidade da caixa dependendo se é cliente normal ou bigodinho"""
+    cli_upper = str(cliente).upper()
+    # Verifica se é um pedido dos representantes (bigodinho)
+    is_bigodinho = any(palavra in cli_upper for palavra in ["BIGODINHO", "LUCAS", "JIMMY", "REP"])
+    
+    if tam == "90x60":
+        return 10 if is_bigodinho else 11
+    elif tam == "60x40":
+        return 24
+    elif tam == "30x40":
+        return 50
+    return 1
 
 # ==============================================================================
 # ⚙️ CONEXÃO COM O SUPABASE
@@ -92,45 +105,74 @@ def mover_demanda(d_atual, d_alvo, idx_atual, idx_alvo):
         st.rerun()
     except: st.error("Erro ao mover card.")
 
-# --- GERADOR DE ETIQUETAS NA MEMÓRIA ---
+# --- GERADOR DE ETIQUETAS NA MEMÓRIA (FORMATO GRANDE) ---
+def obter_fonte(tamanho):
+    # Tenta carregar fontes nativas ou padrões
+    fontes_tentativas = ["arialbd.ttf", "arial.ttf", "DejaVuSans-Bold.ttf", "LiberationSans-Bold.ttf", "FreeSansBold.ttf"]
+    for f in fontes_tentativas:
+        try: return ImageFont.truetype(f, tamanho)
+        except: pass
+    return ImageFont.load_default()
+
 def gerar_etiqueta_memoria(cliente, nf, tam, padrao_un):
     img = Image.new('RGB', (1000, 1600), 'white')
     draw = ImageDraw.Draw(img)
     
-    # Fonte padrão (evita erro na nuvem que não tem fontes do Windows)
-    try: f_padrao = ImageFont.truetype("arial.ttf", 60)
-    except: f_padrao = ImageFont.load_default()
+    # Fontes com tamanhos gigantes
+    f_nf = obter_fonte(130)
+    f_cli = obter_fonte(80)
+    f_quadro = obter_fonte(70)
+    f_contem = obter_fonte(110)
+    f_codigo = obter_fonte(70)
 
-    draw.text((500, 150), f"NF {nf}", font=f_padrao, fill="black", anchor="mm")
+    # NF - Topo Gigante
+    draw.text((500, 150), f"NF {nf}", font=f_nf, fill="black", anchor="mm")
     
+    # Nome do Cliente - Quebra de linha inteligente
     texto_cli = str(cliente).upper().strip()
     linhas, linha_atual = [], ""
     for palavra in texto_cli.split():
         teste_linha = f"{linha_atual} {palavra}".strip()
-        if draw.textlength(teste_linha, font=f_padrao) <= 900: linha_atual = teste_linha
+        try: w = draw.textlength(teste_linha, font=f_cli)
+        except: w = draw.textsize(teste_linha, font=f_cli)[0] # Fallback
+        
+        if w <= 900: linha_atual = teste_linha
         else:
             if linha_atual: linhas.append(linha_atual)
             linha_atual = palavra
     if linha_atual: linhas.append(linha_atual)
 
-    for i, linha in enumerate(linhas[:5]):
-        draw.text((500, 300 + (i * 80)), linha, font=f_padrao, fill="black", anchor="mm")
+    # Imprime o cliente centralizado (máx 4 linhas)
+    y_inicial_cli = 330
+    for i, linha in enumerate(linhas[:4]):
+        draw.text((500, y_inicial_cli + (i * 90)), linha, font=f_cli, fill="black", anchor="mm")
 
-    draw.text((500, 750), f"Quadro Decorativo {tam}cm", font=f_padrao, fill="black", anchor="mm")
+    # Medida
+    draw.text((500, 750), f"Quadro Decorativo {tam}cm", font=f_quadro, fill="black", anchor="mm")
     
+    # Código de Barras e Número
     try:
         EAN = barcode.get_barcode_class('code128')
         rv = io.BytesIO()
-        EAN(CODIGOS_BARRA.get(tam, "0000000000000"), writer=ImageWriter()).write(rv, options={"write_text": False, "module_height": 18.0})
+        EAN(CODIGOS_BARRA.get(tam, "0000000000000"), writer=ImageWriter()).write(rv, options={"write_text": False, "module_height": 20.0})
         rv.seek(0)
-        img.paste(Image.open(rv).resize((850, 350)), (75, 850))
-        draw.text((500, 1250), CODIGOS_BARRA.get(tam, "0000000000000"), font=f_padrao, fill="black", anchor="mm")
+        bc_img = Image.open(rv).convert("RGBA")
+        bc_img = bc_img.resize((800, 350)) # Deixa o código de barras largo
+        
+        # Centraliza a imagem do código de barras
+        bg_w, bg_h = bc_img.size
+        offset = ((1000 - bg_w) // 2, 850)
+        img.paste(bc_img, offset, bc_img)
+        
+        # Número do código de barras embaixo
+        draw.text((500, 1260), CODIGOS_BARRA.get(tam, "0000000000000"), font=f_codigo, fill="black", anchor="mm")
     except: pass
     
-    draw.text((500, 1480), f"Contem {padrao_un} unidades", font=f_padrao, fill="black", anchor="mm")
+    # Contém X unidades (DINÂMICO!)
+    draw.text((500, 1480), f"Contém {padrao_un} unidades", font=f_contem, fill="black", anchor="mm")
     
     img_byte_arr = io.BytesIO()
-    img.save(img_byte_arr, format='JPEG', quality=95)
+    img.save(img_byte_arr, format='JPEG', quality=100)
     img_byte_arr.seek(0)
     return img_byte_arr
 
@@ -195,10 +237,12 @@ if st.session_state.modo_demanda == 'lista':
                     st.markdown("**📦 Medidas:**")
                     for it in d['itens']:
                         tam, qtd = it['tam'], int(it['qtd'])
-                        cap = CONTEUDO_POR_CAIXA.get(tam, 1)
+                        # CHAMA A FUNÇÃO INTELIGENTE AQUI!
+                        cap = obter_capacidade(d['cliente'], tam)
+                        
                         caixas = math.ceil(qtd / cap)
                         txt_cx = "caixa" if caixas == 1 else "caixas"
-                        st.markdown(f"- **{tam}** - {qtd} un - **{caixas} {txt_cx}**")
+                        st.markdown(f"- **{tam}** - {qtd} un - **{caixas} {txt_cx}** *(Cap: {cap}/cx)*")
 
                 if d.get('agendamento'): st.write(f"📅 **Agendamento:** {d['agendamento']}")
                 if d.get('referencia'): st.write(f"📝 **Referência:** {d['referencia']}")
@@ -220,7 +264,6 @@ if st.session_state.modo_demanda == 'lista':
 
                 st.write("---")
                 st.markdown("### ⚙️ AÇÕES")
-                # AGORA TEMOS 5 COLUNAS PARA CABER O BOTÃO DE ETIQUETAS
                 c1, c2, c3, c4, c5 = st.columns(5)
                 if c1.button("✏️ Editar", key=f"ed_{d['id']}"):
                     st.session_state.modo_demanda = 'editar'
@@ -235,14 +278,13 @@ if st.session_state.modo_demanda == 'lista':
                 if c4.button("⬇️ Descer", key=f"down_{d['id']}"):
                     if idx < len(demandas_do_dia) - 1: mover_demanda(d, demandas_do_dia[idx+1], idx, idx+1)
                 
-                # NOVO BOTÃO DE ETIQUETAS
                 if c5.button("🏷️ Etiquetas", key=f"etq_{d['id']}"):
                     st.session_state.demanda_etiqueta = d
                     st.session_state.modo_demanda = 'etiquetas'
                     st.rerun()
 
 # ------------------------------------------------------------------------------
-# MODO: GERADOR DE ETIQUETAS (NOVO!)
+# MODO: GERADOR DE ETIQUETAS
 # ------------------------------------------------------------------------------
 elif st.session_state.modo_demanda == 'etiquetas':
     d = st.session_state.demanda_etiqueta
@@ -250,21 +292,19 @@ elif st.session_state.modo_demanda == 'etiquetas':
     st.info(f"**Cliente:** {d['cliente']} | **NF:** {d['nf']}")
     
     with st.container(border=True):
-        st.write("📦 **CAIXAS IDENTIFICADAS:**")
-        total_etiquetas = 0
+        st.write("📦 **MEDIDAS PARA ETIQUETAR:**")
         lista_geracao = []
         
         for it in d.get('itens', []):
             tam, qtd = it['tam'], int(it['qtd'])
-            cap = CONTEUDO_POR_CAIXA.get(tam, 1)
-            caixas = math.ceil(qtd / cap)
-            txt_cx = "caixa" if caixas == 1 else "caixas"
-            st.write(f"- {tam} ({qtd} un): **{caixas} {txt_cx}**")
-            total_etiquetas += caixas
-            lista_geracao.append({'tam': tam, 'caixas': caixas, 'cap': cap})
+            # CHAMA A FUNÇÃO INTELIGENTE AQUI!
+            cap = obter_capacidade(d['cliente'], tam)
+            
+            st.write(f"- {tam} ({qtd} un) - *{cap} por caixa*")
+            lista_geracao.append({'tam': tam, 'cap': cap})
             
         st.write("---")
-        st.write(f"Total de Etiquetas a gerar: **{total_etiquetas}**")
+        st.write("Será gerada **1 imagem de etiqueta** por cada tamanho acima.")
         
         if st.button("🚀 GERAR ARQUIVOS DE ETIQUETAS", use_container_width=True):
             with st.spinner("Desenhando etiquetas e empacotando..."):
@@ -273,10 +313,10 @@ elif st.session_state.modo_demanda == 'etiquetas':
                 
                 with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
                     for item in lista_geracao:
-                        for i in range(item['caixas']):
-                            img_byte_arr = gerar_etiqueta_memoria(d['cliente'], d['nf'], item['tam'], item['cap'])
-                            nome_arquivo = f"NF_{d['nf']}_{nome_sanitizado}_{item['tam']}_CX{i+1}.jpg"
-                            zip_file.writestr(nome_arquivo, img_byte_arr.getvalue())
+                        # GERA APENAS UMA ETIQUETA POR MEDIDA COM A CAPACIDADE CORRETA
+                        img_byte_arr = gerar_etiqueta_memoria(d['cliente'], d['nf'], item['tam'], item['cap'])
+                        nome_arquivo = f"NF_{d['nf']}_{nome_sanitizado}_{item['tam']}.jpg"
+                        zip_file.writestr(nome_arquivo, img_byte_arr.getvalue())
                 
                 zip_buffer.seek(0)
                 st.session_state.zip_pronto = zip_buffer.getvalue()
@@ -285,7 +325,7 @@ elif st.session_state.modo_demanda == 'etiquetas':
         
         if 'zip_pronto' in st.session_state:
             st.download_button(
-                label="📥 BAIXAR PACOTE DE ETIQUETAS (.ZIP)",
+                label="📥 BAIXAR ETIQUETAS (.ZIP)",
                 data=st.session_state.zip_pronto,
                 file_name=st.session_state.zip_nome,
                 mime="application/zip",
