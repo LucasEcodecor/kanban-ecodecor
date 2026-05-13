@@ -85,16 +85,23 @@ def mover_demanda(d_atual, d_alvo, idx_atual, idx_alvo):
         st.error("Erro ao mover card.")
 
 # ==============================================================================
-# 📋 INTERFACE KANBAN
+# 📋 INTERFACE KANBAN (LOGO NO LUGAR DO TÍTULO)
 # ==============================================================================
-st.markdown("<h2 style='text-align: center;'>📋 DEMANDA ECO DECOR</h2>", unsafe_allow_html=True)
 
-# --- LINHA DA NOVA LOGO ---
-try:
-    st.image("ECO TRANSPARENTE Logo Nova.png", use_container_width=True) 
-except:
-    st.warning("⚠️ Imagem 'ECO TRANSPARENTE Logo Nova.png' não encontrada no GitHub.")
-# ----------------------------
+# Criamos colunas para centralizar a logo
+col_logo1, col_logo2, col_logo3 = st.columns([1, 2, 1])
+
+with col_logo2:
+    try:
+        # Colocamos a imagem no lugar do texto e do ícone
+        st.image("ECO TRANSPARENTE Logo Nova.png") 
+    except:
+        # Caso a imagem suma do GitHub, ele mostra o texto como plano B
+        st.markdown("<h2 style='text-align: center;'>ECO DECOR</h2>", unsafe_allow_html=True)
+
+st.markdown("<p style='text-align: center; color: #888;'>DEMANDA DIÁRIA DE PRODUÇÃO</p>", unsafe_allow_html=True)
+
+# ------------------------------------------------------------------------------
 
 nav1, nav2, nav3, nav4, nav5 = st.columns([1,1,2,1,1])
 if nav2.button("◀", key="btn_ant"): st.session_state.data_foco -= datetime.timedelta(days=1); st.rerun()
