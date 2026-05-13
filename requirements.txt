@@ -1,2 +1,6 @@
 streamlit
 supabase
+streamlit
+supabase
+pillow
+python-barcode
