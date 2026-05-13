@@ -130,7 +130,7 @@ if st.session_state.modo_demanda == 'lista':
 
     st.write("---")
     demandas_do_dia = bd.get(data_str, [])
-    demandas_do_dia.sort(key=lambda x: (x.get('ordem', 999), x['id']))
+    demandas_do_dia.sort(key=lambda x: (x.get('ordem') if x.get('ordem') is not None else 999, x['id']))
 
     if not demandas_do_dia:
         st.info(f"Nenhuma demanda para {st.session_state.data_foco.strftime('%d/%m/%Y')}.")
