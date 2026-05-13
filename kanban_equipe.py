@@ -105,10 +105,10 @@ def mover_demanda(d_atual, d_alvo, idx_atual, idx_alvo):
         st.rerun()
     except: st.error("Erro ao mover card.")
 
-# --- GERADOR DE ETIQUETAS NA MEMÓRIA (FORMATO GRANDE) ---
+# --- GERADOR DE ETIQUETAS NA MEMÓRIA (FORMATO GRANDE E NEGRITO) ---
 def obter_fonte(tamanho):
-    # Tenta carregar fontes nativas ou padrões
-    fontes_tentativas = ["arialbd.ttf", "arial.ttf", "DejaVuSans-Bold.ttf", "LiberationSans-Bold.ttf", "FreeSansBold.ttf"]
+    # Tenta carregar fontes negritadas do Linux (servidor Streamlit)
+    fontes_tentativas = ["arialbd.ttf", "DejaVuSans-Bold.ttf", "LiberationSans-Bold.ttf", "FreeSansBold.ttf", "arial.ttf"]
     for f in fontes_tentativas:
         try: return ImageFont.truetype(f, tamanho)
         except: pass
@@ -118,15 +118,15 @@ def gerar_etiqueta_memoria(cliente, nf, tam, padrao_un):
     img = Image.new('RGB', (1000, 1600), 'white')
     draw = ImageDraw.Draw(img)
     
-    # Fontes com tamanhos gigantes
-    f_nf = obter_fonte(130)
-    f_cli = obter_fonte(80)
-    f_quadro = obter_fonte(70)
-    f_contem = obter_fonte(110)
-    f_codigo = obter_fonte(70)
+    # Fontes com tamanhos gigantes e Stroke para simular Negrito extra
+    f_nf = obter_fonte(140)
+    f_cli = obter_fonte(85)
+    f_quadro = obter_fonte(75)
+    f_contem = obter_fonte(120)
+    f_codigo = obter_fonte(80)
 
     # NF - Topo Gigante
-    draw.text((500, 150), f"NF {nf}", font=f_nf, fill="black", anchor="mm")
+    draw.text((500, 150), f"NF {nf}", font=f_nf, fill="black", anchor="mm", stroke_width=2)
     
     # Nome do Cliente - Quebra de linha inteligente
     texto_cli = str(cliente).upper().strip()
@@ -134,7 +134,7 @@ def gerar_etiqueta_memoria(cliente, nf, tam, padrao_un):
     for palavra in texto_cli.split():
         teste_linha = f"{linha_atual} {palavra}".strip()
         try: w = draw.textlength(teste_linha, font=f_cli)
-        except: w = draw.textsize(teste_linha, font=f_cli)[0] # Fallback
+        except: w = draw.textsize(teste_linha, font=f_cli)[0]
         
         if w <= 900: linha_atual = teste_linha
         else:
@@ -142,34 +142,29 @@ def gerar_etiqueta_memoria(cliente, nf, tam, padrao_un):
             linha_atual = palavra
     if linha_atual: linhas.append(linha_atual)
 
-    # Imprime o cliente centralizado (máx 4 linhas)
-    y_inicial_cli = 330
+    # Imprime o cliente centralizado
+    y_inicial_cli = 350
     for i, linha in enumerate(linhas[:4]):
-        draw.text((500, y_inicial_cli + (i * 90)), linha, font=f_cli, fill="black", anchor="mm")
+        draw.text((500, y_inicial_cli + (i * 100)), linha, font=f_cli, fill="black", anchor="mm", stroke_width=1)
 
     # Medida
-    draw.text((500, 750), f"Quadro Decorativo {tam}cm", font=f_quadro, fill="black", anchor="mm")
+    draw.text((500, 780), f"Quadro Decorativo {tam}cm", font=f_quadro, fill="black", anchor="mm", stroke_width=1)
     
-    # Código de Barras e Número
+    # Código de Barras
     try:
         EAN = barcode.get_barcode_class('code128')
         rv = io.BytesIO()
         EAN(CODIGOS_BARRA.get(tam, "0000000000000"), writer=ImageWriter()).write(rv, options={"write_text": False, "module_height": 20.0})
         rv.seek(0)
-        bc_img = Image.open(rv).convert("RGBA")
-        bc_img = bc_img.resize((800, 350)) # Deixa o código de barras largo
+        bc_img = Image.open(rv).resize((850, 380)) 
+        img.paste(bc_img, (75, 880))
         
-        # Centraliza a imagem do código de barras
-        bg_w, bg_h = bc_img.size
-        offset = ((1000 - bg_w) // 2, 850)
-        img.paste(bc_img, offset, bc_img)
-        
-        # Número do código de barras embaixo
-        draw.text((500, 1260), CODIGOS_BARRA.get(tam, "0000000000000"), font=f_codigo, fill="black", anchor="mm")
+        # Número do código embaixo
+        draw.text((500, 1320), CODIGOS_BARRA.get(tam, "0000000000000"), font=f_codigo, fill="black", anchor="mm", stroke_width=1)
     except: pass
     
-    # Contém X unidades (DINÂMICO!)
-    draw.text((500, 1480), f"Contém {padrao_un} unidades", font=f_contem, fill="black", anchor="mm")
+    # Contém X unidades
+    draw.text((500, 1500), f"Contém {padrao_un} unidades", font=f_contem, fill="black", anchor="mm", stroke_width=2)
     
     img_byte_arr = io.BytesIO()
     img.save(img_byte_arr, format='JPEG', quality=100)
