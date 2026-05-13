@@ -88,14 +88,15 @@ def mover_demanda(d_atual, d_alvo, idx_atual, idx_alvo):
 # 📋 INTERFACE KANBAN E CABEÇALHO
 # ==============================================================================
 
-# Cria colunas para colocar a logo e o título lado a lado com alinhamento vertical
-col_logo, col_titulo = st.columns([1, 4], vertical_alignment="center")
+# Cria colunas, deixando a primeira bem estreitinha só para a logo
+col_logo, col_titulo = st.columns([1, 8], vertical_alignment="center")
 
 with col_logo:
     try:
-        st.image("ECO TRANSPARENTE Logo Nova.png", use_container_width=True) 
+        # Travamos a largura em 50 pixels para ficar do tamanho exato do texto
+        st.image("ECO TRANSPARENTE Logo Nova.png", width=50) 
     except:
-        st.write("🖼️") # Se a imagem não carregar, mostra um ícone genérico
+        st.write("🖼️") 
 
 with col_titulo:
     st.markdown("<h2 style='margin: 0;'>DEMANDA DIÁRIA</h2>", unsafe_allow_html=True)
