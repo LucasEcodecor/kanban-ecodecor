@@ -1,14 +1,7 @@
 import streamlit as st
 import datetime
 import math
-import io
-import zipfile
-import os
-import urllib.request
 from supabase import create_client, Client
-from PIL import Image, ImageDraw, ImageFont
-import barcode
-from barcode.writer import ImageWriter
 
 # ==============================================================================
 # 🎨 DESIGN E ESTILO
@@ -32,16 +25,19 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# ⚙️ CONFIGURAÇÕES DE ETIQUETAS E CAIXAS
+# ⚙️ CONFIGURAÇÕES DE CAIXAS
 # ==============================================================================
-CODIGOS_BARRA = {"30x40": "17908843201175", "60x40": "17908843201168", "90x60": "17908843201151"}
-
 def obter_capacidade(cliente, tam):
+    """Calcula a capacidade da caixa dependendo se é cliente normal ou bigodinho"""
     cli_upper = str(cliente).upper()
     is_bigodinho = any(palavra in cli_upper for palavra in ["BIGODINHO", "LUCAS", "JIMMY", "REP"])
-    if tam == "90x60": return 10 if is_bigodinho else 11
-    elif tam == "60x40": return 24
-    elif tam == "30x40": return 50
+    
+    if tam == "90x60":
+        return 10 if is_bigodinho else 11
+    elif tam == "60x40":
+        return 24
+    elif tam == "30x40":
+        return 50
     return 1
 
 # ==============================================================================
@@ -62,6 +58,7 @@ ETAPAS_PRODUCAO = [
     "NOTA FISCAL (MICHELLI)", "LIBERADO PARA ENTREGA (MICHELLI)"
 ]
 
+# Variáveis de Estado
 if 'data_foco' not in st.session_state: st.session_state.data_foco = datetime.date.today() + datetime.timedelta(days=1)
 if 'modo_demanda' not in st.session_state: st.session_state.modo_demanda = 'lista'
 if 'itens_temp' not in st.session_state: st.session_state.itens_temp = []
@@ -99,119 +96,6 @@ def mover_demanda(d_atual, d_alvo, idx_atual, idx_alvo):
         supabase.table("demandas").update({"ordem": ordem_atual}).eq("id", d_alvo['id']).execute()
         st.rerun()
     except: st.error("Erro ao mover card.")
-
-# --- GERADOR DE ETIQUETAS NA MEMÓRIA ---
-def obter_fonte_grossa(tamanho):
-    """Baixa uma fonte grossa se não existir na nuvem"""
-    caminho_fonte = "Roboto-Black.ttf"
-    if not os.path.exists(caminho_fonte):
-        try:
-            url = "https://github.com/google/fonts/raw/main/ofl/roboto/Roboto-Black.ttf"
-            urllib.request.urlretrieve(url, caminho_fonte)
-        except: pass
-        
-    try: return ImageFont.truetype(caminho_fonte, tamanho)
-    except: 
-        try: return ImageFont.truetype("arialbd.ttf", tamanho)
-        except: return ImageFont.load_default()
-
-def gerar_etiqueta_memoria(cliente, nf, tam, padrao_un):
-    img = Image.new('RGB', (1000, 1600), 'white')
-    draw = ImageDraw.Draw(img)
-    
-    cli_upper = str(cliente).upper().strip()
-    is_lucas = "LUCAS" in cli_upper
-    is_jimmy = "JIMMY" in cli_upper
-    is_bigodinho = is_lucas or is_jimmy or "BIGODINHO" in cli_upper or "REP" in cli_upper
-
-    if is_bigodinho:
-        # ===============================================================
-        # LAYOUT REPRESENTANTES (BIGODINHO) - IGUAL A IMAGEM DE REFERÊNCIA
-        # ===============================================================
-        f_nf = obter_fonte_grossa(180)
-        f_infos = obter_fonte_grossa(80)
-        f_quadro = obter_fonte_grossa(60)
-        f_codigo = obter_fonte_grossa(50)
-        f_contem = obter_fonte_grossa(90)
-
-        # NF Gigante
-        draw.text((500, 150), f"NF {nf}", font=f_nf, fill="black", anchor="mm")
-        
-        # CNPJ e SKU Alinhados a esquerda
-        cnpj = "49.657.733/0001-92" if is_lucas else "30.514.229/0001-05" if is_jimmy else ""
-        draw.text((75, 350), f"CNPJ:{cnpj}", font=f_infos, fill="black", anchor="lm")
-        draw.text((75, 450), "SKU:", font=f_infos, fill="black", anchor="lm")
-
-        # Quadro Decorativo
-        draw.text((500, 950), f"Quadro Decorativo {tam}cm", font=f_quadro, fill="black", anchor="mm")
-        
-        # Código de Barras com Borda Grossa
-        try:
-            EAN = barcode.get_barcode_class('code128')
-            rv = io.BytesIO()
-            EAN(CODIGOS_BARRA.get(tam, "0000000000000"), writer=ImageWriter()).write(rv, options={"write_text": False, "module_height": 18.0})
-            rv.seek(0)
-            bc_img = Image.open(rv).resize((850, 250)) 
-            img.paste(bc_img, (75, 1000))
-            
-            # Desenha a borda preta em volta do código
-            draw.rectangle([75, 1000, 75+850, 1000+250], outline="black", width=20)
-            
-            # Números espaçados
-            codigo = CODIGOS_BARRA.get(tam, "0000000000000")
-            codigo_espacado = "   ".join(list(codigo))
-            draw.text((500, 1310), codigo_espacado, font=f_codigo, fill="black", anchor="mm")
-        except: pass
-        
-        # Contém
-        draw.text((500, 1480), f"Contém {padrao_un} unidades", font=f_contem, fill="black", anchor="mm")
-
-    else:
-        # ===============================================================
-        # LAYOUT CLIENTE NORMAL (Centralizado)
-        # ===============================================================
-        f_nf = obter_fonte_grossa(140)
-        f_cli = obter_fonte_grossa(85)
-        f_quadro = obter_fonte_grossa(75)
-        f_codigo = obter_fonte_grossa(80)
-        f_contem = obter_fonte_grossa(120)
-
-        draw.text((500, 150), f"NF {nf}", font=f_nf, fill="black", anchor="mm")
-        
-        linhas, linha_atual = [], ""
-        for palavra in cli_upper.split():
-            teste_linha = f"{linha_atual} {palavra}".strip()
-            try: w = draw.textlength(teste_linha, font=f_cli)
-            except: w = draw.textsize(teste_linha, font=f_cli)[0]
-            
-            if w <= 900: linha_atual = teste_linha
-            else:
-                if linha_atual: linhas.append(linha_atual)
-                linha_atual = palavra
-        if linha_atual: linhas.append(linha_atual)
-
-        y_inicial_cli = 350
-        for i, linha in enumerate(linhas[:4]):
-            draw.text((500, y_inicial_cli + (i * 100)), linha, font=f_cli, fill="black", anchor="mm")
-
-        draw.text((500, 780), f"Quadro Decorativo {tam}cm", font=f_quadro, fill="black", anchor="mm")
-        
-        try:
-            EAN = barcode.get_barcode_class('code128')
-            rv = io.BytesIO()
-            EAN(CODIGOS_BARRA.get(tam, "0000000000000"), writer=ImageWriter()).write(rv, options={"write_text": False, "module_height": 20.0})
-            rv.seek(0)
-            bc_img = Image.open(rv).resize((850, 380)) 
-            img.paste(bc_img, (75, 880))
-            draw.text((500, 1320), CODIGOS_BARRA.get(tam, "0000000000000"), font=f_codigo, fill="black", anchor="mm")
-        except: pass
-        
-        draw.text((500, 1500), f"Contém {padrao_un} unidades", font=f_contem, fill="black", anchor="mm")
-    
-    img_byte_arr = io.BytesIO()
-    img.save(img_byte_arr, format='JPEG', quality=100)
-    img_byte_arr.seek(0)
-    return img_byte_arr
 
 # ==============================================================================
 # 📋 CABEÇALHO CENTRALIZADO
@@ -287,52 +171,61 @@ if st.session_state.modo_demanda == 'lista':
                     if idx > 0: mover_demanda(d, demandas_do_dia[idx-1], idx, idx-1)
                 if c4.button("⬇️ Descer", key=f"down_{d['id']}"):
                     if idx < len(demandas_do_dia) - 1: mover_demanda(d, demandas_do_dia[idx+1], idx, idx+1)
-                if c5.button("🏷️ Etiquetas", key=f"etq_{d['id']}"):
+                if c5.button("📄 Extrair", key=f"etq_{d['id']}"):
                     st.session_state.demanda_etiqueta = d; st.session_state.modo_demanda = 'etiquetas'; st.rerun()
 
 # ------------------------------------------------------------------------------
-# MODO: GERADOR DE ETIQUETAS
+# MODO: GERADOR DE TXT PARA ETIQUETAS
 # ------------------------------------------------------------------------------
 elif st.session_state.modo_demanda == 'etiquetas':
     d = st.session_state.demanda_etiqueta
-    st.markdown(f"<h3 style='text-align: center;'>🏷️ GERADOR DE ETIQUETAS</h3>", unsafe_allow_html=True)
-    st.info(f"**Cliente:** {d['cliente']} | **NF:** {d['nf']}")
+    st.markdown(f"<h3 style='text-align: center;'>📄 DADOS PARA ETIQUETAS</h3>", unsafe_allow_html=True)
+    st.info(f"**Cliente Original:** {d['cliente']} | **NF:** {d['nf']}")
     
     with st.container(border=True):
-        st.write("📦 **MEDIDAS PARA ETIQUETAR:**")
-        lista_geracao = []
+        st.write("📦 **RESUMO PARA O ARQUIVO:**")
         
+        # Triagem do nome do cliente
+        cli_upper = str(d['cliente']).upper()
+        if "LUCAS" in cli_upper: nome_impresso = "LUCAS"
+        elif "JIMMY" in cli_upper: nome_impresso = "JIMMY"
+        elif "BIGODINHO" in cli_upper: nome_impresso = "LUCAS" # Fallback caso não tenha o nome exato
+        else: nome_impresso = cli_upper
+        
+        linhas_txt = []
+        linhas_txt.append("=== DADOS PARA IMPRESSÃO DE ETIQUETAS ===\n")
+
         for it in d.get('itens', []):
             tam, qtd = it['tam'], int(it['qtd'])
             cap = obter_capacidade(d['cliente'], tam)
-            st.write(f"- {tam} ({qtd} un) - *{cap} por caixa*")
-            lista_geracao.append({'tam': tam, 'cap': cap})
+            caixas = math.ceil(qtd / cap)
             
+            st.write(f"- {tam} ({qtd} un) -> Vai gerar info para **{caixas} caixa(s)**")
+            
+            for i in range(caixas):
+                # Calcula se a caixa atual está cheia ou é a última caixa com o "resto"
+                unidades = cap if (i < caixas - 1) or (qtd % cap == 0) else (qtd % cap)
+                
+                linhas_txt.append(f"NF: {d['nf']}")
+                linhas_txt.append(f"CLIENTE: {nome_impresso}")
+                linhas_txt.append(f"MEDIDA: {tam}")
+                linhas_txt.append(f"QUANTIDADE: {unidades} unidades")
+                linhas_txt.append("-" * 30)
+
         st.write("---")
-        st.write("Será gerada **1 imagem de etiqueta** por cada tamanho acima.")
+        conteudo_txt = "\n".join(linhas_txt)
         
-        if st.button("🚀 GERAR ARQUIVOS DE ETIQUETAS", use_container_width=True):
-            with st.spinner("Desenhando etiquetas e empacotando..."):
-                zip_buffer = io.BytesIO()
-                nome_sanitizado = str(d['cliente'])[:15].replace('/', '-').replace('\\', '-').strip()
-                
-                with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
-                    for item in lista_geracao:
-                        img_byte_arr = gerar_etiqueta_memoria(d['cliente'], d['nf'], item['tam'], item['cap'])
-                        nome_arquivo = f"NF_{d['nf']}_{nome_sanitizado}_{item['tam']}.jpg"
-                        zip_file.writestr(nome_arquivo, img_byte_arr.getvalue())
-                
-                zip_buffer.seek(0)
-                st.session_state.zip_pronto = zip_buffer.getvalue()
-                st.session_state.zip_nome = f"ETIQUETAS_NF_{d['nf']}.zip"
-                st.success("✅ Etiquetas prontas para download!")
-        
-        if 'zip_pronto' in st.session_state:
-            st.download_button("📥 BAIXAR ETIQUETAS (.ZIP)", data=st.session_state.zip_pronto, file_name=st.session_state.zip_nome, mime="application/zip", use_container_width=True)
+        st.download_button(
+            label="📥 BAIXAR DOCUMENTO DE TEXTO (.TXT)",
+            data=conteudo_txt,
+            file_name=f"DADOS_ETIQUETA_NF_{d['nf']}.txt",
+            mime="text/plain",
+            use_container_width=True
+        )
 
     if st.button("❌ VOLTAR AO PAINEL"):
-        if 'zip_pronto' in st.session_state: del st.session_state['zip_pronto']
-        st.session_state.modo_demanda = 'lista'; st.rerun()
+        st.session_state.modo_demanda = 'lista'
+        st.rerun()
 
 # ------------------------------------------------------------------------------
 # MODO: NOVA OU EDITAR DEMANDA
