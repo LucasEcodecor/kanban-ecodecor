@@ -185,12 +185,14 @@ elif st.session_state.modo_demanda == 'etiquetas':
     with st.container(border=True):
         st.write("📦 **RESUMO PARA O ARQUIVO:**")
         
-        # Triagem do nome do cliente
+        # Triagem do nome do cliente / CNPJ
         cli_upper = str(d['cliente']).upper()
-        if "LUCAS" in cli_upper: nome_impresso = "LUCAS"
-        elif "JIMMY" in cli_upper: nome_impresso = "JIMMY"
-        elif "BIGODINHO" in cli_upper: nome_impresso = "LUCAS" # Fallback caso não tenha o nome exato
-        else: nome_impresso = cli_upper
+        if "LUCAS" in cli_upper or "BIGODINHO" in cli_upper:
+            linha_cli_cnpj = "CNPJ: 49.657.733/0001-92"
+        elif "JIMMY" in cli_upper:
+            linha_cli_cnpj = "CNPJ: 30.514.229/0001-05"
+        else:
+            linha_cli_cnpj = f"CLIENTE: {cli_upper}"
         
         linhas_txt = []
         linhas_txt.append("=== DADOS PARA IMPRESSÃO DE ETIQUETAS ===\n")
@@ -200,17 +202,13 @@ elif st.session_state.modo_demanda == 'etiquetas':
             cap = obter_capacidade(d['cliente'], tam)
             caixas = math.ceil(qtd / cap)
             
-            st.write(f"- {tam} ({qtd} un) -> Vai gerar info para **{caixas} caixa(s)**")
+            st.write(f"- {tam} ({qtd} un) -> Vai gerar **1 bloco de informações** para {caixas} caixa(s)")
             
-            for i in range(caixas):
-                # Calcula se a caixa atual está cheia ou é a última caixa com o "resto"
-                unidades = cap if (i < caixas - 1) or (qtd % cap == 0) else (qtd % cap)
-                
-                linhas_txt.append(f"NF: {d['nf']}")
-                linhas_txt.append(f"CLIENTE: {nome_impresso}")
-                linhas_txt.append(f"MEDIDA: {tam}")
-                linhas_txt.append(f"QUANTIDADE: {unidades} unidades")
-                linhas_txt.append("-" * 30)
+            linhas_txt.append(f"NF: {d['nf']}")
+            linhas_txt.append(linha_cli_cnpj)
+            linhas_txt.append(f"MEDIDA: {tam}")
+            linhas_txt.append(f"QUANTIDADE NA CAIXA: {cap} unidades")
+            linhas_txt.append("-" * 30)
 
         st.write("---")
         conteudo_txt = "\n".join(linhas_txt)
