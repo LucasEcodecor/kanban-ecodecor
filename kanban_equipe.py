@@ -5,9 +5,10 @@ import os
 from supabase import create_client, Client
 
 # ==============================================================================
-# 🎨 DESIGN E ESTILO
+# 🎨 DESIGN E ESTILO (AGORA COM A LOGO NO ÍCONE DA PÁGINA)
 # ==============================================================================
-st.set_page_config(page_title="ECO DECOR - Demanda diária", page_icon="📋", layout="centered")
+# Alterado o page_icon para a imagem da logo
+st.set_page_config(page_title="ECO DECOR - Demanda diária", page_icon="ECO TRANSPARENTE Logo Nova.png", layout="centered")
 
 st.markdown("""
     <style>
@@ -88,22 +89,22 @@ def mover_demanda(d_atual, d_alvo, idx_atual, idx_alvo):
 # 📋 INTERFACE KANBAN E CABEÇALHO CENTRALIZADO
 # ==============================================================================
 
-# Cria colunas com espaços vazios nas pontas (2 e 2) para "espremer" a logo e o título para o centro
-col_vazia_esq, col_logo, col_titulo, col_vazia_dir = st.columns([2, 1, 3, 2], vertical_alignment="center")
+# Cria 3 colunas para centralizar perfeitamente a imagem no topo
+c_esq, c_meio, c_dir = st.columns([1, 2, 1])
 
-with col_logo:
+with c_meio:
     try:
-        # A logo no tamanho ideal para acompanhar o texto
-        st.image("ECO TRANSPARENTE Logo Nova.png", width=60) 
+        # AQUI VAI A IMAGEM NOVA!
+        st.image("ECO TRANSPARENTE Logo Nova PNG.png", use_container_width=True) 
     except:
-        st.write("🖼️") 
+        st.markdown("<h2 style='text-align: center;'>ECO DECOR</h2>", unsafe_allow_html=True)
 
-with col_titulo:
-    st.markdown("<h2 style='margin: 0; text-align: left;'>DEMANDA DIÁRIA</h2>", unsafe_allow_html=True)
+# Título centralizado abaixo da logo
+st.markdown("<h2 style='text-align: center; margin-top: -15px;'>DEMANDA DIÁRIA</h2>", unsafe_allow_html=True)
 
 st.write("---") # Linha divisória
 
-# Navegação de Datas (Também espremida para o centro com proporções [2, 1, 3, 1, 2])
+# Navegação de Datas (Centralizada)
 nav_espaco1, btn_ant, nav_data, btn_prox, nav_espaco2 = st.columns([2, 1, 3, 1, 2], vertical_alignment="center")
 
 if btn_ant.button("◀", key="btn_ant"): 
@@ -243,7 +244,7 @@ elif st.session_state.modo_demanda in ['nova', 'editar']:
                     st.session_state.itens_temp = []
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Erro ao guardar: {e}")
+                    st.error(f"Erro ao salvar: {e}")
             else:
                 st.warning("⚠️ Preencha Nome, NF e adicione uma medida!")
 
