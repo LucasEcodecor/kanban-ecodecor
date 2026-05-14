@@ -122,7 +122,6 @@ if st.session_state.modo_demanda == 'lista':
     if c_topo1.button("➕ ADICIONAR NOVA DEMANDA", use_container_width=True):
         st.session_state.modo_demanda = 'nova'; st.session_state.itens_temp = []; st.session_state.demanda_edit = None; st.rerun()
 
-    # EXTRAÇÃO EM MASSA (CORRIGIDA)
     if demandas_do_dia:
         linhas_massa = []
         linhas_massa.append(f"=== ETIQUETAS DO DIA: {st.session_state.data_foco.strftime('%d/%m/%Y')} ===\n")
@@ -137,7 +136,6 @@ if st.session_state.modo_demanda == 'lista':
                 tam = it['tam']
                 cap = obter_capacidade(dem['cliente'], tam)
                 
-                # ADICIONA APENAS UMA VEZ POR MEDIDA
                 linhas_massa.append(f"NF: {dem['nf']}")
                 linhas_massa.append(linha_cli_cnpj)
                 linhas_massa.append(f"MEDIDA: {tam}")
@@ -196,7 +194,7 @@ if st.session_state.modo_demanda == 'lista':
                     st.session_state.demanda_etiqueta = d; st.session_state.modo_demanda = 'etiquetas'; st.rerun()
 
 # ------------------------------------------------------------------------------
-# MODO: GERADOR DE TXT PARA ETIQUETAS (INDIVIDUAL - CORRIGIDO)
+# MODO: GERADOR DE TXT PARA ETIQUETAS (INDIVIDUAL)
 # ------------------------------------------------------------------------------
 elif st.session_state.modo_demanda == 'etiquetas':
     d = st.session_state.demanda_etiqueta
@@ -217,10 +215,8 @@ elif st.session_state.modo_demanda == 'etiquetas':
         for it in d.get('itens', []):
             tam = it['tam']
             cap = obter_capacidade(d['cliente'], tam)
-            
             st.write(f"- {tam} -> Vai gerar **1 bloco de info** para as caixas")
             
-            # ADICIONA APENAS UMA VEZ POR MEDIDA
             linhas_txt.append(f"NF: {d['nf']}")
             linhas_txt.append(linha_cli_cnpj)
             linhas_txt.append(f"MEDIDA: {tam}")
@@ -229,7 +225,6 @@ elif st.session_state.modo_demanda == 'etiquetas':
 
         st.write("---")
         conteudo_txt = "\n".join(linhas_txt)
-        
         st.download_button("📥 BAIXAR DOCUMENTO DE TEXTO (.TXT)", data=conteudo_txt, file_name=f"DADOS_ETIQUETA_NF_{d['nf']}.txt", mime="text/plain", use_container_width=True)
 
     if st.button("❌ VOLTAR AO PAINEL"):
@@ -246,8 +241,23 @@ elif st.session_state.modo_demanda in ['nova', 'editar']:
     with st.container(border=True):
         cli_d = st.text_input("Nome do cliente:", value=d_edit.get('cliente', '')).strip().upper()
         nf_d = st.text_input("Número da NF:", value=d_edit.get('nf', '')).strip().upper()
-        st.write("📦 **ITENS DA DEMANDA:**")
         
+        # ======================================================================
+        # 🛡️ RADAR DE NF DUPLICADA (INTELIGÊNCIA)
+        # ======================================================================
+        nf_duplicada = False
+        if nf_d:
+            # Verifica se está editando e é a mesma NF (aí não é problema)
+            if not is_edit or (is_edit and nf_d != d_edit.get('nf', '').upper()):
+                try:
+                    busca = supabase.table("demandas").select("id").eq("nf", nf_d).execute()
+                    if len(busca.data) > 0:
+                        nf_duplicada = True
+                        st.markdown("<p style='color: #ff4b4b; font-size: 15px; font-weight: bold; margin-top: -15px;'>⚠️ Este número de NF já foi utilizado!</p>", unsafe_allow_html=True)
+                except:
+                    pass
+
+        st.write("📦 **ITENS DA DEMANDA:**")
         for i, item in enumerate(st.session_state.itens_temp):
             c_it1, c_it2 = st.columns([4, 1])
             c_it1.write(f"• **{item['qtd']}** unidades de **{item['tam']}**")
@@ -265,7 +275,9 @@ elif st.session_state.modo_demanda in ['nova', 'editar']:
         
         c_salvar, c_voltar = st.columns(2)
         if c_salvar.button("✅ SALVAR NA NUVEM"):
-            if cli_d and nf_d and len(st.session_state.itens_temp) > 0:
+            if nf_duplicada:
+                st.error("⚠️ Corrija o número da NF antes de salvar. Essa nota já existe no sistema!")
+            elif cli_d and nf_d and len(st.session_state.itens_temp) > 0:
                 dados = {"data": st.session_state.data_foco.strftime("%Y-%m-%d") if not is_edit else d_edit['data'], "cliente": cli_d, "nf": nf_d, "itens": st.session_state.itens_temp, "agendamento": txt_agend, "referencia": txt_ref}
                 try:
                     if is_edit: supabase.table("demandas").update(dados).eq("id", d_edit['id']).execute()
