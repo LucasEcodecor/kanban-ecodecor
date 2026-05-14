@@ -28,16 +28,11 @@ st.markdown("""
 # ⚙️ CONFIGURAÇÕES DE CAIXAS
 # ==============================================================================
 def obter_capacidade(cliente, tam):
-    """Calcula a capacidade da caixa dependendo se é cliente normal ou bigodinho"""
     cli_upper = str(cliente).upper()
     is_bigodinho = any(palavra in cli_upper for palavra in ["BIGODINHO", "LUCAS", "JIMMY", "REP"])
-    
-    if tam == "90x60":
-        return 10 if is_bigodinho else 11
-    elif tam == "60x40":
-        return 24
-    elif tam == "30x40":
-        return 50
+    if tam == "90x60": return 10 if is_bigodinho else 11
+    elif tam == "60x40": return 24
+    elif tam == "30x40": return 50
     return 1
 
 # ==============================================================================
@@ -58,7 +53,6 @@ ETAPAS_PRODUCAO = [
     "NOTA FISCAL (MICHELLI)", "LIBERADO PARA ENTREGA (MICHELLI)"
 ]
 
-# Variáveis de Estado
 if 'data_foco' not in st.session_state: st.session_state.data_foco = datetime.date.today() + datetime.timedelta(days=1)
 if 'modo_demanda' not in st.session_state: st.session_state.modo_demanda = 'lista'
 if 'itens_temp' not in st.session_state: st.session_state.itens_temp = []
@@ -124,12 +118,11 @@ if st.session_state.modo_demanda == 'lista':
     demandas_do_dia = bd.get(data_str, [])
     demandas_do_dia.sort(key=lambda x: (x.get('ordem') if x.get('ordem') is not None else 999, x['id']))
 
-    # Botões do Topo (Adicionar e Extrair Massa)
     c_topo1, c_topo2 = st.columns(2)
     if c_topo1.button("➕ ADICIONAR NOVA DEMANDA", use_container_width=True):
         st.session_state.modo_demanda = 'nova'; st.session_state.itens_temp = []; st.session_state.demanda_edit = None; st.rerun()
 
-    # Só mostra o botão de extrair tudo se tiver demandas no dia
+    # EXTRAÇÃO EM MASSA (CORRIGIDA)
     if demandas_do_dia:
         linhas_massa = []
         linhas_massa.append(f"=== ETIQUETAS DO DIA: {st.session_state.data_foco.strftime('%d/%m/%Y')} ===\n")
@@ -141,17 +134,15 @@ if st.session_state.modo_demanda == 'lista':
             else: linha_cli_cnpj = f"CLIENTE: {cli_upper}"
                 
             for it in dem.get('itens', []):
-                tam, qtd = it['tam'], int(it['qtd'])
+                tam = it['tam']
                 cap = obter_capacidade(dem['cliente'], tam)
-                caixas = math.ceil(qtd / cap)
                 
-                for i in range(caixas):
-                    unidades = cap if (i < caixas - 1) or (qtd % cap == 0) else (qtd % cap)
-                    linhas_massa.append(f"NF: {dem['nf']}")
-                    linhas_massa.append(linha_cli_cnpj)
-                    linhas_massa.append(f"MEDIDA: {tam}")
-                    linhas_massa.append(f"QUANTIDADE: {unidades} unidades")
-                    linhas_massa.append("-" * 30)
+                # ADICIONA APENAS UMA VEZ POR MEDIDA
+                linhas_massa.append(f"NF: {dem['nf']}")
+                linhas_massa.append(linha_cli_cnpj)
+                linhas_massa.append(f"MEDIDA: {tam}")
+                linhas_massa.append(f"QUANTIDADE: {cap} unidades")
+                linhas_massa.append("-" * 30)
         
         conteudo_massa = "\n".join(linhas_massa)
         c_topo2.download_button("📥 EXTRAIR TODAS AS ETIQUETAS DO DIA", data=conteudo_massa, file_name=f"ETIQUETAS_GERAL_{data_str}.txt", mime="text/plain", use_container_width=True)
@@ -205,7 +196,7 @@ if st.session_state.modo_demanda == 'lista':
                     st.session_state.demanda_etiqueta = d; st.session_state.modo_demanda = 'etiquetas'; st.rerun()
 
 # ------------------------------------------------------------------------------
-# MODO: GERADOR DE TXT PARA ETIQUETAS (INDIVIDUAL)
+# MODO: GERADOR DE TXT PARA ETIQUETAS (INDIVIDUAL - CORRIGIDO)
 # ------------------------------------------------------------------------------
 elif st.session_state.modo_demanda == 'etiquetas':
     d = st.session_state.demanda_etiqueta
@@ -215,48 +206,34 @@ elif st.session_state.modo_demanda == 'etiquetas':
     with st.container(border=True):
         st.write("📦 **RESUMO PARA O ARQUIVO:**")
         
-        # Triagem do nome do cliente / CNPJ
         cli_upper = str(d['cliente']).upper()
-        if "LUCAS" in cli_upper or "BIGODINHO" in cli_upper:
-            linha_cli_cnpj = "CNPJ: 49.657.733/0001-92"
-        elif "JIMMY" in cli_upper:
-            linha_cli_cnpj = "CNPJ: 30.514.229/0001-05"
-        else:
-            linha_cli_cnpj = f"CLIENTE: {cli_upper}"
+        if "LUCAS" in cli_upper or "BIGODINHO" in cli_upper: linha_cli_cnpj = "CNPJ: 49.657.733/0001-92"
+        elif "JIMMY" in cli_upper: linha_cli_cnpj = "CNPJ: 30.514.229/0001-05"
+        else: linha_cli_cnpj = f"CLIENTE: {cli_upper}"
         
         linhas_txt = []
         linhas_txt.append("=== DADOS PARA IMPRESSÃO DE ETIQUETAS ===\n")
 
         for it in d.get('itens', []):
-            tam, qtd = it['tam'], int(it['qtd'])
+            tam = it['tam']
             cap = obter_capacidade(d['cliente'], tam)
-            caixas = math.ceil(qtd / cap)
             
-            st.write(f"- {tam} ({qtd} un) -> Vai gerar info para **{caixas} caixa(s)**")
+            st.write(f"- {tam} -> Vai gerar **1 bloco de info** para as caixas")
             
-            for i in range(caixas):
-                unidades = cap if (i < caixas - 1) or (qtd % cap == 0) else (qtd % cap)
-                
-                linhas_txt.append(f"NF: {d['nf']}")
-                linhas_txt.append(linha_cli_cnpj)
-                linhas_txt.append(f"MEDIDA: {tam}")
-                linhas_txt.append(f"QUANTIDADE: {unidades} unidades")
-                linhas_txt.append("-" * 30)
+            # ADICIONA APENAS UMA VEZ POR MEDIDA
+            linhas_txt.append(f"NF: {d['nf']}")
+            linhas_txt.append(linha_cli_cnpj)
+            linhas_txt.append(f"MEDIDA: {tam}")
+            linhas_txt.append(f"QUANTIDADE: {cap} unidades")
+            linhas_txt.append("-" * 30)
 
         st.write("---")
         conteudo_txt = "\n".join(linhas_txt)
         
-        st.download_button(
-            label="📥 BAIXAR DOCUMENTO DE TEXTO (.TXT)",
-            data=conteudo_txt,
-            file_name=f"DADOS_ETIQUETA_NF_{d['nf']}.txt",
-            mime="text/plain",
-            use_container_width=True
-        )
+        st.download_button("📥 BAIXAR DOCUMENTO DE TEXTO (.TXT)", data=conteudo_txt, file_name=f"DADOS_ETIQUETA_NF_{d['nf']}.txt", mime="text/plain", use_container_width=True)
 
     if st.button("❌ VOLTAR AO PAINEL"):
-        st.session_state.modo_demanda = 'lista'
-        st.rerun()
+        st.session_state.modo_demanda = 'lista'; st.rerun()
 
 # ------------------------------------------------------------------------------
 # MODO: NOVA OU EDITAR DEMANDA
@@ -274,17 +251,13 @@ elif st.session_state.modo_demanda in ['nova', 'editar']:
         for i, item in enumerate(st.session_state.itens_temp):
             c_it1, c_it2 = st.columns([4, 1])
             c_it1.write(f"• **{item['qtd']}** unidades de **{item['tam']}**")
-            if c_it2.button("🗑️", key=f"rem_item_{i}"):
-                st.session_state.itens_temp.pop(i)
-                st.rerun()
+            if c_it2.button("🗑️", key=f"rem_item_{i}"): st.session_state.itens_temp.pop(i); st.rerun()
                 
         st.write("---")
         c_m1, c_m2, c_m3 = st.columns([2, 2, 2])
         t_med = c_m1.selectbox("Medida:", ["30x40", "60x40", "90x60"])
         t_qtd = c_m2.number_input("QTD:", min_value=1, value=1)
-        if c_m3.button("➕ Adicionar Medida"):
-            st.session_state.itens_temp.append({"tam": t_med, "qtd": t_qtd})
-            st.rerun()
+        if c_m3.button("➕ Adicionar Medida"): st.session_state.itens_temp.append({"tam": t_med, "qtd": t_qtd}); st.rerun()
 
         st.write("---")
         txt_agend = st.text_input("Agendamento:", value=d_edit.get('agendamento', '')).strip().upper()
