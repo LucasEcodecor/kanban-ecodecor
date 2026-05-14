@@ -121,12 +121,42 @@ data_str = st.session_state.data_foco.strftime("%Y-%m-%d")
 # MODO: LISTA KANBAN
 # ------------------------------------------------------------------------------
 if st.session_state.modo_demanda == 'lista':
-    if st.button("➕ ADICIONAR NOVA DEMANDA"):
-        st.session_state.modo_demanda = 'nova'; st.session_state.itens_temp = []; st.session_state.demanda_edit = None; st.rerun()
-
-    st.write("---")
     demandas_do_dia = bd.get(data_str, [])
     demandas_do_dia.sort(key=lambda x: (x.get('ordem') if x.get('ordem') is not None else 999, x['id']))
+
+    # Botões do Topo (Adicionar e Extrair Massa)
+    c_topo1, c_topo2 = st.columns(2)
+    if c_topo1.button("➕ ADICIONAR NOVA DEMANDA", use_container_width=True):
+        st.session_state.modo_demanda = 'nova'; st.session_state.itens_temp = []; st.session_state.demanda_edit = None; st.rerun()
+
+    # Só mostra o botão de extrair tudo se tiver demandas no dia
+    if demandas_do_dia:
+        linhas_massa = []
+        linhas_massa.append(f"=== ETIQUETAS DO DIA: {st.session_state.data_foco.strftime('%d/%m/%Y')} ===\n")
+        
+        for dem in demandas_do_dia:
+            cli_upper = str(dem['cliente']).upper()
+            if "LUCAS" in cli_upper or "BIGODINHO" in cli_upper: linha_cli_cnpj = "CNPJ: 49.657.733/0001-92"
+            elif "JIMMY" in cli_upper: linha_cli_cnpj = "CNPJ: 30.514.229/0001-05"
+            else: linha_cli_cnpj = f"CLIENTE: {cli_upper}"
+                
+            for it in dem.get('itens', []):
+                tam, qtd = it['tam'], int(it['qtd'])
+                cap = obter_capacidade(dem['cliente'], tam)
+                caixas = math.ceil(qtd / cap)
+                
+                for i in range(caixas):
+                    unidades = cap if (i < caixas - 1) or (qtd % cap == 0) else (qtd % cap)
+                    linhas_massa.append(f"NF: {dem['nf']}")
+                    linhas_massa.append(linha_cli_cnpj)
+                    linhas_massa.append(f"MEDIDA: {tam}")
+                    linhas_massa.append(f"QUANTIDADE: {unidades} unidades")
+                    linhas_massa.append("-" * 30)
+        
+        conteudo_massa = "\n".join(linhas_massa)
+        c_topo2.download_button("📥 EXTRAIR TODAS AS ETIQUETAS DO DIA", data=conteudo_massa, file_name=f"ETIQUETAS_GERAL_{data_str}.txt", mime="text/plain", use_container_width=True)
+
+    st.write("---")
 
     if not demandas_do_dia:
         st.info(f"Nenhuma demanda para {st.session_state.data_foco.strftime('%d/%m/%Y')}.")
@@ -175,7 +205,7 @@ if st.session_state.modo_demanda == 'lista':
                     st.session_state.demanda_etiqueta = d; st.session_state.modo_demanda = 'etiquetas'; st.rerun()
 
 # ------------------------------------------------------------------------------
-# MODO: GERADOR DE TXT PARA ETIQUETAS
+# MODO: GERADOR DE TXT PARA ETIQUETAS (INDIVIDUAL)
 # ------------------------------------------------------------------------------
 elif st.session_state.modo_demanda == 'etiquetas':
     d = st.session_state.demanda_etiqueta
@@ -202,13 +232,16 @@ elif st.session_state.modo_demanda == 'etiquetas':
             cap = obter_capacidade(d['cliente'], tam)
             caixas = math.ceil(qtd / cap)
             
-            st.write(f"- {tam} ({qtd} un) -> Vai gerar **1 bloco de informações** para {caixas} caixa(s)")
+            st.write(f"- {tam} ({qtd} un) -> Vai gerar info para **{caixas} caixa(s)**")
             
-            linhas_txt.append(f"NF: {d['nf']}")
-            linhas_txt.append(linha_cli_cnpj)
-            linhas_txt.append(f"MEDIDA: {tam}")
-            linhas_txt.append(f"QUANTIDADE NA CAIXA: {cap} unidades")
-            linhas_txt.append("-" * 30)
+            for i in range(caixas):
+                unidades = cap if (i < caixas - 1) or (qtd % cap == 0) else (qtd % cap)
+                
+                linhas_txt.append(f"NF: {d['nf']}")
+                linhas_txt.append(linha_cli_cnpj)
+                linhas_txt.append(f"MEDIDA: {tam}")
+                linhas_txt.append(f"QUANTIDADE: {unidades} unidades")
+                linhas_txt.append("-" * 30)
 
         st.write("---")
         conteudo_txt = "\n".join(linhas_txt)
