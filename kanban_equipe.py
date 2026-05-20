@@ -4,8 +4,17 @@ import math
 from supabase import create_client, Client
 
 # ==============================================================================
-# 🎨 CONFIGURAÇÃO DA PÁGINA
+# 🚀 ECO DECOR - DEMANDA DIÁRIA | V6 TURBO MOBILE
+# Melhorias focadas em velocidade + uso no celular:
+# - Busca apenas a data selecionada no Supabase
+# - Cache curto da data atual
+# - Paginação de cards
+# - Etapas salvas em lote dentro de formulário
+# - TXT geral de etiquetas gerado apenas quando solicitado
+# - Formulários para reduzir reruns desnecessários
+# - Layout responsivo para produção usar no celular
 # ==============================================================================
+
 st.set_page_config(
     page_title="ECO DECOR - Demanda diária",
     page_icon="ECO TRANSPARENTE Logo Nova.png",
@@ -13,264 +22,216 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ==============================================================================
-# 🎨 DESIGN RESPONSIVO - DESKTOP + CELULAR
-# ==============================================================================
 st.markdown("""
 <style>
-    :root {
-        --bg: #0e1117;
-        --card: #171b26;
-        --card-2: #1f2433;
-        --border: #2f3548;
-        --text: #fafafa;
-        --muted: #aab2c5;
-        --primary: #5d7cf3;
-        --primary-2: #425bd6;
-        --danger: #ff4b4b;
-        --warning: #facc15;
-        --success: #22c55e;
-    }
+    .stApp { background-color: #0e1117; color: #fafafa; }
+    h1, h2, h3, h4 { color: #fafafa !important; }
 
-    .stApp { background-color: var(--bg); color: var(--text); }
-    h1, h2, h3, h4, h5, h6, p, label, span { color: var(--text) !important; }
-
-    .block-container {
-        padding-top: 1.2rem;
-        padding-bottom: 2rem;
-        max-width: 1250px;
+    .main-header {
+        background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
+        border: 1px solid #2f3542;
+        border-radius: 18px;
+        padding: 20px 24px;
+        margin-bottom: 16px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.25);
     }
+    .main-title { font-size: 30px; font-weight: 900; margin: 0; letter-spacing: .3px; }
+    .main-subtitle { color: #cbd5e1; margin-top: 6px; font-size: 15px; }
+
+    .metric-card {
+        background-color: #151a23;
+        border: 1px solid #2d3748;
+        border-radius: 14px;
+        padding: 14px 16px;
+        min-height: 86px;
+    }
+    .metric-label { color: #94a3b8; font-size: 13px; font-weight: 700; }
+    .metric-value { color: #ffffff; font-size: 26px; font-weight: 900; margin-top: 5px; }
+
+    .demand-card {
+        background-color: #151a23;
+        border: 1px solid #2d3748;
+        border-radius: 16px;
+        padding: 12px 14px;
+        margin-bottom: 10px;
+    }
+    .demand-title { font-size: 17px; font-weight: 900; color: #f8fafc; }
+    .demand-meta { color: #cbd5e1; font-size: 13px; margin-top: 4px; }
+    .status-badge {
+        display:inline-block;
+        padding: 5px 10px;
+        border-radius: 999px;
+        font-weight: 900;
+        font-size: 13px;
+        margin: 6px 0;
+    }
+    .pendente { background-color: #451a1a; color: #fecaca; border: 1px solid #7f1d1d; }
+    .andamento { background-color: #422006; color: #fde68a; border: 1px solid #92400e; }
+    .finalizado { background-color: #052e16; color: #bbf7d0; border: 1px solid #166534; }
 
     div.stButton > button, div.stDownloadButton > button {
         width: 100%;
-        min-height: 46px;
-        background: linear-gradient(135deg, var(--primary), var(--primary-2)) !important;
+        min-height: 44px;
+        background-color: #3157d5 !important;
         color: white !important;
         font-weight: 800 !important;
-        border-radius: 12px !important;
-        border: 1px solid rgba(255,255,255,.08) !important;
-        box-shadow: 0 8px 20px rgba(0,0,0,.25);
+        border-radius: 10px !important;
+        border: none !important;
     }
-
     div.stButton > button:hover, div.stDownloadButton > button:hover {
-        filter: brightness(1.08);
-        transform: translateY(-1px);
+        background-color: #2445ad !important;
+        color: white !important;
     }
 
-    .eco-header {
-        background: linear-gradient(135deg, #121827, #1d2740);
-        border: 1px solid var(--border);
-        border-radius: 22px;
-        padding: 18px 22px;
-        margin-bottom: 16px;
-        box-shadow: 0 12px 30px rgba(0,0,0,.28);
+    .soft-box {
+        background-color: #111827;
+        border: 1px solid #334155;
+        border-radius: 14px;
+        padding: 14px;
     }
 
-    .eco-title {
-        font-size: 30px;
-        font-weight: 900;
-        text-align: center;
-        margin: 0;
-        letter-spacing: .5px;
-    }
-
-    .eco-subtitle {
-        text-align: center;
-        color: var(--muted) !important;
-        font-size: 15px;
-        margin-top: 4px;
-    }
-
-    .metric-card {
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 18px;
-        padding: 14px 16px;
-        box-shadow: 0 10px 22px rgba(0,0,0,.18);
-        min-height: 92px;
-    }
-
-    .metric-label {
-        color: var(--muted) !important;
-        font-size: 13px;
-        font-weight: 700;
-        margin-bottom: 5px;
-    }
-
-    .metric-value {
-        color: #ffffff !important;
-        font-size: 28px;
-        font-weight: 900;
-        line-height: 1;
-    }
-
-    .demand-card {
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 20px;
-        padding: 16px;
-        margin-bottom: 14px;
-        box-shadow: 0 10px 24px rgba(0,0,0,.22);
-    }
-
-    .demand-head {
-        display: flex;
-        justify-content: space-between;
-        gap: 12px;
-        align-items: flex-start;
-        margin-bottom: 10px;
-    }
-
-    .demand-client {
-        font-size: 18px;
-        font-weight: 900;
-        line-height: 1.15;
-    }
-
-    .demand-nf {
-        color: var(--muted) !important;
-        font-weight: 800;
-        margin-top: 3px;
-    }
-
-    .status-badge {
-        display: inline-block;
-        padding: 6px 10px;
-        border-radius: 999px;
-        font-weight: 900;
-        font-size: 13px;
-        white-space: nowrap;
-    }
-    .pendente { background-color: rgba(239,68,68,.18); color: #ff8b8b !important; border: 1px solid rgba(239,68,68,.35); }
-    .andamento { background-color: rgba(250,204,21,.15); color: #fde047 !important; border: 1px solid rgba(250,204,21,.35); }
-    .finalizado { background-color: rgba(34,197,94,.15); color: #86efac !important; border: 1px solid rgba(34,197,94,.35); }
-
-    .item-pill {
-        display: inline-block;
-        background: var(--card-2);
-        border: 1px solid var(--border);
-        border-radius: 999px;
-        padding: 6px 10px;
-        margin: 4px 4px 4px 0;
-        font-size: 13px;
-        font-weight: 800;
-    }
-
-    .info-line {
-        color: var(--muted) !important;
-        font-size: 14px;
-        margin: 5px 0;
-    }
-
-    .section-card {
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 20px;
-        padding: 18px;
-        margin-bottom: 15px;
-        box-shadow: 0 10px 24px rgba(0,0,0,.20);
-    }
-
-    textarea, input, select {
-        border-radius: 12px !important;
-    }
-
-    div[data-testid="stExpander"] {
-        background-color: transparent !important;
-        border: 0 !important;
-        box-shadow: none !important;
-    }
-
-    div[data-testid="stExpander"] details {
-        background: transparent !important;
-        border: 0 !important;
-    }
-
-    div[data-testid="stCheckbox"] label {
-        background: #151a25;
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 8px 10px;
-        width: 100%;
-        margin-bottom: 4px;
-    }
-
-    .mobile-note { display: none; }
-
+    /* ===============================================================
+       📱 AJUSTES RESPONSIVOS PARA CELULAR
+       Mantém o desktop largo, mas empilha colunas no telefone.
+       =============================================================== */
     @media (max-width: 768px) {
         .block-container {
-            padding-left: .75rem;
-            padding-right: .75rem;
-            padding-top: .75rem;
+            padding-left: 0.75rem !important;
+            padding-right: 0.75rem !important;
+            padding-top: 2.25rem !important;
+            max-width: 100% !important;
         }
 
-        .eco-header {
-            padding: 14px;
-            border-radius: 16px;
+        .main-header {
+            padding: 16px 14px 18px 14px;
+            border-radius: 14px;
+            margin-top: 12px;
+            margin-bottom: 14px;
+            overflow: visible !important;
+        }
+        .main-title {
+            display: block;
+            font-size: 19px;
+            line-height: 1.35;
+            white-space: normal;
+            word-break: normal;
+            overflow: visible !important;
+        }
+        .main-subtitle {
+            display: block;
+            font-size: 12.5px;
+            line-height: 1.45;
+            margin-top: 8px;
+            overflow: visible !important;
         }
 
-        .eco-title {
-            font-size: 22px;
+        /* Força os blocos horizontais do Streamlit a virarem coluna no celular */
+        div[data-testid="stHorizontalBlock"] {
+            flex-wrap: wrap !important;
+            gap: 0.45rem !important;
         }
-
-        .eco-subtitle {
-            font-size: 13px;
+        div[data-testid="column"] {
+            min-width: 100% !important;
+            width: 100% !important;
+            flex: 1 1 100% !important;
         }
 
         .metric-card {
-            min-height: auto;
-            padding: 12px;
-            border-radius: 14px;
+            min-height: 64px;
+            padding: 10px 12px;
+            margin-bottom: 6px;
+            border-radius: 12px;
         }
-
-        .metric-value {
-            font-size: 23px;
-        }
+        .metric-label { font-size: 12px; }
+        .metric-value { font-size: 22px; }
 
         .demand-card {
-            border-radius: 16px;
-            padding: 13px;
+            padding: 12px;
+            border-radius: 14px;
+            margin-bottom: 12px;
         }
-
-        .demand-head {
-            display: block;
-        }
-
-        .demand-client {
+        .demand-title {
             font-size: 16px;
+            line-height: 1.25;
         }
-
+        .demand-meta {
+            font-size: 12.5px;
+            line-height: 1.35;
+        }
         .status-badge {
-            margin-top: 8px;
             font-size: 12px;
+            padding: 5px 9px;
         }
 
         div.stButton > button, div.stDownloadButton > button {
-            min-height: 44px;
-            font-size: 13px !important;
-            padding-left: 8px !important;
-            padding-right: 8px !important;
+            min-height: 50px;
+            font-size: 14px !important;
+            border-radius: 12px !important;
+            margin-top: 4px;
         }
 
-        .item-pill {
-            display: block;
-            margin: 6px 0;
-            text-align: center;
+        div[data-testid="stExpander"] {
+            border-radius: 12px !important;
         }
 
-        .mobile-note {
-            display: block;
-            color: var(--muted) !important;
-            font-size: 12px;
-            text-align: center;
-            margin-top: 6px;
+        textarea, input, select {
+            font-size: 16px !important; /* evita zoom automático no iPhone */
+        }
+    }
+
+    @media (min-width: 769px) {
+        .block-container {
+            padding-top: 1.25rem !important;
+            max-width: 1400px !important;
         }
     }
 </style>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# ⚙️ CONFIGURAÇÕES DE CAIXAS
+# ⚙️ CONFIGURAÇÕES
+# ==============================================================================
+URL_SUPABASE = "https://amnjfpettwnrhszgdpyk.supabase.co"
+CHAVE_SUPABASE = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFtbmpmcGV0dHducmhzemdkcHlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2MDY0MjUsImV4cCI6MjA5NDE4MjQyNX0.WHbyxzceCNo1_btFkpwM0nov4I73zqiSa4taYkH6msc"
+
+ETAPAS_PRODUCAO = [
+    "ETIQUETAS (LUCAS)",
+    "ARTE (TALLES/LUCAS)",
+    "IMPRESSÃO (TALLES)",
+    "CORTE EM ANDAMENTO (DAVID)",
+    "CORTE FINALIZADO (DAVID)",
+    "PRODUÇÃO EM ANDAMENTO (SASKA)",
+    "PRODUÇÃO FINALIZADO (SASKA)",
+    "NOTA FISCAL (MICHELLI)",
+    "LIBERADO PARA ENTREGA (MICHELLI)",
+]
+
+try:
+    supabase: Client = create_client(URL_SUPABASE, CHAVE_SUPABASE)
+except Exception as e:
+    st.error(f"Erro ao inicializar o Supabase: {e}")
+    st.stop()
+
+# ==============================================================================
+# 🧠 SESSION STATE
+# ==============================================================================
+if "data_foco" not in st.session_state:
+    st.session_state.data_foco = datetime.date.today() + datetime.timedelta(days=1)
+if "modo_demanda" not in st.session_state:
+    st.session_state.modo_demanda = "lista"
+if "itens_temp" not in st.session_state:
+    st.session_state.itens_temp = []
+if "demanda_edit" not in st.session_state:
+    st.session_state.demanda_edit = None
+if "demanda_etiqueta" not in st.session_state:
+    st.session_state.demanda_etiqueta = None
+if "pagina_atual" not in st.session_state:
+    st.session_state.pagina_atual = 1
+if "mostrar_txt_geral" not in st.session_state:
+    st.session_state.mostrar_txt_geral = False
+
+# ==============================================================================
+# 🧰 FUNÇÕES
 # ==============================================================================
 def obter_capacidade(cliente, tam):
     cli_upper = str(cliente).upper()
@@ -283,148 +244,6 @@ def obter_capacidade(cliente, tam):
         return 50
     return 1
 
-# ==============================================================================
-# ⚙️ CONEXÃO COM O SUPABASE
-# ==============================================================================
-URL_SUPABASE = "https://amnjfpettwnrhszgdpyk.supabase.co"
-CHAVE_SUPABASE = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFtbmpmcGV0dHducmhzemdkcHlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2MDY0MjUsImV4cCI6MjA5NDE4MjQyNX0.WHbyxzceCNo1_btFkpwM0nov4I73zqiSa4taYkH6msc"
-
-try:
-    supabase: Client = create_client(URL_SUPABASE, CHAVE_SUPABASE)
-except Exception as e:
-    st.error(f"Erro ao inicializar o Supabase: {e}")
-
-ETAPAS_PRODUCAO = [
-    "ETIQUETAS (LUCAS)", "ARTE (TALLES/LUCAS)", "IMPRESSÃO (TALLES)",
-    "CORTE EM ANDAMENTO (DAVID)", "CORTE FINALIZADO (DAVID)",
-    "PRODUÇÃO EM ANDAMENTO (SASKA)", "PRODUÇÃO FINALIZADO (SASKA)",
-    "NOTA FISCAL (MICHELLI)", "LIBERADO PARA ENTREGA (MICHELLI)"
-]
-
-if 'data_foco' not in st.session_state:
-    st.session_state.data_foco = datetime.date.today() + datetime.timedelta(days=1)
-if 'modo_demanda' not in st.session_state:
-    st.session_state.modo_demanda = 'lista'
-if 'itens_temp' not in st.session_state:
-    st.session_state.itens_temp = []
-if 'demanda_edit' not in st.session_state:
-    st.session_state.demanda_edit = None
-if 'demanda_etiqueta' not in st.session_state:
-    st.session_state.demanda_etiqueta = None
-
-# ==============================================================================
-# 🧹 FUNÇÕES TÉCNICAS E BANCO DE DADOS
-# ==============================================================================
-def limpar_demandas_antigas():
-    """Limpeza manual. Não roda automaticamente para não deixar o painel lento."""
-    try:
-        data_limite = datetime.date.today() - datetime.timedelta(days=5)
-        data_limite_str = data_limite.strftime("%Y-%m-%d")
-        supabase.table("demandas").delete().lt("data", data_limite_str).execute()
-        carregar_demandas_data.clear()
-        st.success("Demandas antigas removidas com sucesso.")
-    except Exception as e:
-        st.error(f"Erro ao limpar demandas antigas: {e}")
-
-
-@st.cache_data(ttl=20, show_spinner=False)
-def carregar_demandas_data(data_str):
-    """Busca somente as demandas da data selecionada. Muito mais rápido que baixar o banco inteiro."""
-    try:
-        resposta = (
-            supabase.table("demandas")
-            .select("*")
-            .eq("data", data_str)
-            .order("ordem")
-            .execute()
-        )
-        return resposta.data or []
-    except Exception as e:
-        st.error(f"Erro ao carregar demandas do dia: {e}")
-        return []
-
-
-def atualizar_demanda_bd(demanda_id, dados):
-    try:
-        supabase.table("demandas").update(dados).eq("id", demanda_id).execute()
-        carregar_demandas_data.clear()
-        return True
-    except Exception as e:
-        st.error(f"Erro ao atualizar demanda: {e}")
-        return False
-
-
-def inserir_demanda_bd(dados):
-    try:
-        supabase.table("demandas").insert(dados).execute()
-        carregar_demandas_data.clear()
-        return True
-    except Exception as e:
-        st.error(f"Erro ao salvar: {e}")
-        return False
-
-
-def excluir_demanda_bd(demanda_id):
-    try:
-        supabase.table("demandas").delete().eq("id", demanda_id).execute()
-        carregar_demandas_data.clear()
-        return True
-    except Exception as e:
-        st.error(f"Erro ao excluir demanda: {e}")
-        return False
-
-
-def mover_demanda(d_atual, d_alvo, idx_atual, idx_alvo):
-    ordem_atual = d_atual.get('ordem') if d_atual.get('ordem') is not None else idx_atual
-    ordem_alvo = d_alvo.get('ordem') if d_alvo.get('ordem') is not None else idx_alvo
-    if ordem_atual == ordem_alvo:
-        ordem_atual, ordem_alvo = idx_atual, idx_alvo
-    try:
-        supabase.table("demandas").update({"ordem": ordem_alvo}).eq("id", d_atual['id']).execute()
-        supabase.table("demandas").update({"ordem": ordem_atual}).eq("id", d_alvo['id']).execute()
-        carregar_demandas_data.clear()
-        st.rerun()
-    except Exception as e:
-        st.error(f"Erro ao mover card: {e}")
-
-
-def atualizar_etapas(demanda_id, etapas):
-    """Atualiza etapas sem forçar st.rerun extra; o próprio checkbox já recarrega a tela."""
-    atualizar_demanda_bd(demanda_id, {"etapas": etapas})
-
-
-def ir_para_lista():
-    st.session_state.modo_demanda = 'lista'
-    st.session_state.demanda_edit = None
-    st.session_state.demanda_etiqueta = None
-
-
-def ir_para_nova_demanda():
-    st.session_state.modo_demanda = 'nova'
-    st.session_state.itens_temp = []
-    st.session_state.demanda_edit = None
-
-
-def ir_para_editar_demanda(d):
-    st.session_state.modo_demanda = 'editar'
-    st.session_state.demanda_edit = d
-    st.session_state.itens_temp = d['itens'] if isinstance(d.get('itens'), list) else []
-
-
-def ir_para_etiquetas(d):
-    st.session_state.demanda_etiqueta = d
-    st.session_state.modo_demanda = 'etiquetas'
-
-
-def status_demanda(etapas):
-    marcadas = sum(1 for v in etapas.values() if v)
-    total = len(ETAPAS_PRODUCAO)
-    if marcadas == total:
-        return marcadas, total, "finalizado", "🟢 Finalizado"
-    if marcadas > 0:
-        return marcadas, total, "andamento", "🟡 Em andamento"
-    return marcadas, total, "pendente", "🔴 Pendente"
-
 
 def linha_cliente_etiqueta(cliente):
     cli_upper = str(cliente).upper()
@@ -435,19 +254,19 @@ def linha_cliente_etiqueta(cliente):
     return f"CLIENTE: {cli_upper}"
 
 
-def montar_txt_etiquetas(demandas, data_titulo=None):
+def gerar_txt_etiquetas(demandas, data_label=None):
     linhas = []
-    if data_titulo:
-        linhas.append(f"=== ETIQUETAS DO DIA: {data_titulo} ===\n")
+    if data_label:
+        linhas.append(f"=== ETIQUETAS DO DIA: {data_label} ===\n")
     else:
         linhas.append("=== DADOS PARA IMPRESSÃO DE ETIQUETAS ===\n")
 
     for dem in demandas:
-        linha_cli = linha_cliente_etiqueta(dem['cliente'])
-        for it in dem.get('itens', []):
-            tam = it['tam']
-            cap = obter_capacidade(dem['cliente'], tam)
-            linhas.append(f"NF: {dem['nf']}")
+        linha_cli = linha_cliente_etiqueta(dem.get("cliente", ""))
+        for it in dem.get("itens", []) or []:
+            tam = it.get("tam", "")
+            cap = obter_capacidade(dem.get("cliente", ""), tam)
+            linhas.append(f"NF: {dem.get('nf', '')}")
             linhas.append(linha_cli)
             linhas.append(f"MEDIDA: {tam}")
             linhas.append(f"QUANTIDADE: {cap} unidades")
@@ -455,273 +274,384 @@ def montar_txt_etiquetas(demandas, data_titulo=None):
     return "\n".join(linhas)
 
 
-def render_metric(label, value):
-    st.markdown(
-        f"""
-        <div class="metric-card">
-            <div class="metric-label">{label}</div>
-            <div class="metric-value">{value}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+def total_quadros(demandas):
+    total = 0
+    for d in demandas:
+        for it in d.get("itens", []) or []:
+            try:
+                total += int(it.get("qtd", 0))
+            except Exception:
+                pass
+    return total
 
 
-def render_demand_header(d, etapas):
-    marcadas, total, status_class, status_label = status_demanda(etapas)
-    itens_html = "".join([f"<span class='item-pill'>{int(it['qtd'])}x {it['tam']}</span>" for it in d.get('itens', [])])
-    st.markdown(
-        f"""
-        <div class="demand-card">
-            <div class="demand-head">
-                <div>
-                    <div class="demand-client">{d['cliente']}</div>
-                    <div class="demand-nf">NF: {d['nf']}</div>
-                </div>
-                <span class="status-badge {status_class}">{status_label} · {marcadas}/{total}</span>
-            </div>
-            <div>{itens_html}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+def total_caixas(demandas):
+    caixas = 0
+    for d in demandas:
+        for it in d.get("itens", []) or []:
+            try:
+                qtd = int(it.get("qtd", 0))
+                cap = obter_capacidade(d.get("cliente", ""), it.get("tam", ""))
+                caixas += math.ceil(qtd / cap) if cap else 0
+            except Exception:
+                pass
+    return caixas
+
+
+def status_demanda(d):
+    etapas = d.get("etapas", {}) or {}
+    marcadas = sum(1 for etapa in ETAPAS_PRODUCAO if etapas.get(etapa, False))
+    if marcadas == len(ETAPAS_PRODUCAO):
+        return "finalizado", "🟢", marcadas
+    if marcadas > 0:
+        return "andamento", "🟡", marcadas
+    return "pendente", "🔴", marcadas
+
+
+@st.cache_data(ttl=20, show_spinner=False)
+def carregar_demandas_data(data_str):
+    resposta = (
+        supabase.table("demandas")
+        .select("*")
+        .eq("data", data_str)
+        .order("ordem", desc=False)
+        .execute()
     )
+    dados = resposta.data or []
+    dados.sort(key=lambda x: (x.get("ordem") if x.get("ordem") is not None else 999, x.get("id", 0)))
+    return dados
+
+
+def limpar_cache():
+    carregar_demandas_data.clear()
+
+
+def voltar_lista():
+    st.session_state.modo_demanda = "lista"
+    st.session_state.demanda_edit = None
+    st.session_state.demanda_etiqueta = None
+    st.session_state.itens_temp = []
+    st.session_state.mostrar_txt_geral = False
+
+
+def mover_demanda(d_atual, d_alvo, idx_atual, idx_alvo):
+    ordem_atual = d_atual.get("ordem") if d_atual.get("ordem") is not None else idx_atual
+    ordem_alvo = d_alvo.get("ordem") if d_alvo.get("ordem") is not None else idx_alvo
+    if ordem_atual == ordem_alvo:
+        ordem_atual, ordem_alvo = idx_atual, idx_alvo
+    try:
+        supabase.table("demandas").update({"ordem": ordem_alvo}).eq("id", d_atual["id"]).execute()
+        supabase.table("demandas").update({"ordem": ordem_atual}).eq("id", d_alvo["id"]).execute()
+        limpar_cache()
+        st.rerun()
+    except Exception as e:
+        st.error(f"Erro ao mover card: {e}")
+
+
+def excluir_demanda(d):
+    try:
+        supabase.table("demandas").delete().eq("id", d["id"]).execute()
+        limpar_cache()
+        st.rerun()
+    except Exception as e:
+        st.error(f"Erro ao excluir: {e}")
+
+
+def validar_nf_duplicada(nf, is_edit=False, id_atual=None):
+    if not nf:
+        return False
+    try:
+        busca = supabase.table("demandas").select("id").eq("nf", nf).execute()
+        for item in busca.data or []:
+            if not is_edit or item.get("id") != id_atual:
+                return True
+    except Exception:
+        return False
+    return False
 
 # ==============================================================================
 # 📋 CABEÇALHO
 # ==============================================================================
 st.markdown(
     """
-    <div class="eco-header">
-        <div class="eco-title">ECO DECOR · DEMANDA DIÁRIA</div>
-        <div class="eco-subtitle">Painel rápido de produção, etiquetas e entrega</div>
-        <div class="mobile-note">Versão otimizada para celular</div>
+    <div class="main-header">
+        <div class="main-title">ECO DECOR<br><span style="font-size:0.92em; color:#e5e7eb;">DEMANDA DIÁRIA</span></div>
+        <div class="main-subtitle">Painel otimizado para produção, etiquetas, celular e acompanhamento de etapas.</div>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-nav_ant, nav_data, nav_prox = st.columns([1, 3, 1], vertical_alignment="center")
-if nav_ant.button("◀", key="btn_ant", use_container_width=True):
+nav1, nav2, nav3, nav4, nav5 = st.columns([1, 1, 2, 1, 1], vertical_alignment="center")
+if nav2.button("◀ Anterior", key="btn_ant"):
     st.session_state.data_foco -= datetime.timedelta(days=1)
+    st.session_state.pagina_atual = 1
+    st.session_state.mostrar_txt_geral = False
     st.rerun()
-nova_data = nav_data.date_input("Data da demanda", value=st.session_state.data_foco, format="DD/MM/YYYY", label_visibility="collapsed")
+
+nova_data = nav3.date_input(
+    "Data da demanda",
+    value=st.session_state.data_foco,
+    format="DD/MM/YYYY",
+    label_visibility="collapsed",
+)
 if nova_data != st.session_state.data_foco:
     st.session_state.data_foco = nova_data
+    st.session_state.pagina_atual = 1
+    st.session_state.mostrar_txt_geral = False
     st.rerun()
-if nav_prox.button("▶", key="btn_prox", use_container_width=True):
+
+if nav4.button("Próximo ▶", key="btn_prox"):
     st.session_state.data_foco += datetime.timedelta(days=1)
+    st.session_state.pagina_atual = 1
+    st.session_state.mostrar_txt_geral = False
     st.rerun()
+
+if nav5.button("🔄 Atualizar", key="btn_refresh"):
+    limpar_cache()
+    st.rerun()
+
+st.divider()
 
 data_str = st.session_state.data_foco.strftime("%Y-%m-%d")
-demandas_do_dia_cache = carregar_demandas_data(data_str)
+data_label = st.session_state.data_foco.strftime("%d/%m/%Y")
 
-# ------------------------------------------------------------------------------
-# MODO: LISTA KANBAN
-# ------------------------------------------------------------------------------
-if st.session_state.modo_demanda == 'lista':
-    demandas_do_dia = list(demandas_do_dia_cache)
-    demandas_do_dia.sort(key=lambda x: (x.get('ordem') if x.get('ordem') is not None else 999, x['id']))
+# ==============================================================================
+# 📌 MODO LISTA
+# ==============================================================================
+if st.session_state.modo_demanda == "lista":
+    with st.spinner("Carregando demandas do dia..."):
+        demandas_do_dia = carregar_demandas_data(data_str)
 
-    total_demandas = len(demandas_do_dia)
-    total_quadros = sum(int(it.get('qtd', 0)) for dem in demandas_do_dia for it in dem.get('itens', []))
-    total_caixas = sum(math.ceil(int(it.get('qtd', 0)) / obter_capacidade(dem['cliente'], it['tam'])) for dem in demandas_do_dia for it in dem.get('itens', []))
-    finalizadas = sum(1 for dem in demandas_do_dia if sum(1 for v in dem.get('etapas', {}).values() if v) == len(ETAPAS_PRODUCAO))
+    pendentes = 0
+    andamento = 0
+    finalizadas = 0
+    for d in demandas_do_dia:
+        classe, _, _ = status_demanda(d)
+        if classe == "pendente":
+            pendentes += 1
+        elif classe == "andamento":
+            andamento += 1
+        else:
+            finalizadas += 1
 
-    m1, m2, m3, m4 = st.columns(4)
-    with m1: render_metric("Demandas", total_demandas)
-    with m2: render_metric("Quadros", total_quadros)
-    with m3: render_metric("Caixas", total_caixas)
-    with m4: render_metric("Finalizadas", finalizadas)
-
-    st.write("")
-    c_topo1, c_topo2, c_topo3 = st.columns([1, 1, 1])
-    if c_topo1.button("➕ ADICIONAR NOVA DEMANDA", use_container_width=True):
-        ir_para_nova_demanda()
-        st.rerun()
-
-    if c_topo3.button("🔄 ATUALIZAR", use_container_width=True):
-        carregar_demandas_data.clear()
-        st.rerun()
-
-    if demandas_do_dia:
-        conteudo_massa = montar_txt_etiquetas(demandas_do_dia, st.session_state.data_foco.strftime('%d/%m/%Y'))
-        c_topo2.download_button(
-            "📥 EXTRAIR ETIQUETAS DO DIA",
-            data=conteudo_massa,
-            file_name=f"ETIQUETAS_GERAL_{data_str}.txt",
-            mime="text/plain",
-            use_container_width=True,
-        )
+    m1, m2, m3, m4, m5 = st.columns(5)
+    m1.markdown(f"<div class='metric-card'><div class='metric-label'>Demandas</div><div class='metric-value'>{len(demandas_do_dia)}</div></div>", unsafe_allow_html=True)
+    m2.markdown(f"<div class='metric-card'><div class='metric-label'>Quadros</div><div class='metric-value'>{total_quadros(demandas_do_dia)}</div></div>", unsafe_allow_html=True)
+    m3.markdown(f"<div class='metric-card'><div class='metric-label'>Caixas</div><div class='metric-value'>{total_caixas(demandas_do_dia)}</div></div>", unsafe_allow_html=True)
+    m4.markdown(f"<div class='metric-card'><div class='metric-label'>Em andamento</div><div class='metric-value'>{andamento}</div></div>", unsafe_allow_html=True)
+    m5.markdown(f"<div class='metric-card'><div class='metric-label'>Finalizadas</div><div class='metric-value'>{finalizadas}</div></div>", unsafe_allow_html=True)
 
     st.write("")
+    topo1, topo2, topo3 = st.columns([1.2, 1.2, 1.2])
+    if topo1.button("➕ Nova demanda", use_container_width=True):
+        st.session_state.modo_demanda = "nova"
+        st.session_state.itens_temp = []
+        st.session_state.demanda_edit = None
+        st.rerun()
+
+    if demandas_do_dia and topo2.button("📄 Preparar TXT geral", use_container_width=True):
+        st.session_state.mostrar_txt_geral = not st.session_state.mostrar_txt_geral
+
+    itens_por_pagina = topo3.selectbox("Cards por página", [5, 10, 15, 20, 30], index=1, label_visibility="collapsed")
+
+    if st.session_state.mostrar_txt_geral and demandas_do_dia:
+        conteudo_massa = gerar_txt_etiquetas(demandas_do_dia, data_label=data_label)
+        with st.expander("Preview do TXT geral de etiquetas", expanded=True):
+            st.code(conteudo_massa[:4000] + ("\n..." if len(conteudo_massa) > 4000 else ""), language="text")
+            st.download_button(
+                "📥 Baixar todas as etiquetas do dia",
+                data=conteudo_massa,
+                file_name=f"ETIQUETAS_GERAL_{data_str}.txt",
+                mime="text/plain",
+                use_container_width=True,
+            )
+
+    st.divider()
 
     if not demandas_do_dia:
-        st.info(f"Nenhuma demanda para {st.session_state.data_foco.strftime('%d/%m/%Y')}.")
+        st.info(f"Nenhuma demanda para {data_label}.")
     else:
-        for idx, d in enumerate(demandas_do_dia):
-            etapas = d.get('etapas', {})
-            render_demand_header(d, etapas)
+        total_paginas = max(1, math.ceil(len(demandas_do_dia) / itens_por_pagina))
+        st.session_state.pagina_atual = min(max(1, st.session_state.pagina_atual), total_paginas)
+
+        p1, p2, p3 = st.columns([1, 2, 1])
+        if p1.button("⬅ Página", disabled=st.session_state.pagina_atual <= 1):
+            st.session_state.pagina_atual -= 1
+            st.rerun()
+        p2.markdown(f"<p style='text-align:center;color:#cbd5e1;font-weight:800;'>Página {st.session_state.pagina_atual} de {total_paginas}</p>", unsafe_allow_html=True)
+        if p3.button("Página ➡", disabled=st.session_state.pagina_atual >= total_paginas):
+            st.session_state.pagina_atual += 1
+            st.rerun()
+
+        ini = (st.session_state.pagina_atual - 1) * itens_por_pagina
+        fim = ini + itens_por_pagina
+        demandas_visiveis = demandas_do_dia[ini:fim]
+
+        for idx_local, d in enumerate(demandas_visiveis):
+            idx_global = ini + idx_local
+            classe, icone, marcadas = status_demanda(d)
+            itens = d.get("itens", []) or []
+            medidas_str = " | ".join([f"{it.get('qtd', 0)}x {it.get('tam', '')}" for it in itens])
+
+            st.markdown("<div class='demand-card'>", unsafe_allow_html=True)
+            col_a, col_b = st.columns([3, 1])
+            with col_a:
+                st.markdown(f"<div class='demand-title'>{d.get('cliente', '')}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='demand-meta'>NF: <b>{d.get('nf', '')}</b> • {medidas_str}</div>", unsafe_allow_html=True)
+                st.markdown(f"<span class='status-badge {classe}'>{icone} {marcadas}/{len(ETAPAS_PRODUCAO)}</span>", unsafe_allow_html=True)
+            with col_b:
+                if st.button("📄 Etiquetas", key=f"etq_{d['id']}"):
+                    st.session_state.demanda_etiqueta = d
+                    st.session_state.modo_demanda = "etiquetas"
+                    st.rerun()
 
             with st.expander("Abrir detalhes e etapas", expanded=False):
-                st.markdown(f"**Cliente:** {d['cliente']}  ")
-                st.markdown(f"**NF:** {d['nf']}")
+                cinfo1, cinfo2 = st.columns([1, 1])
+                with cinfo1:
+                    st.markdown("**📦 Medidas e caixas**")
+                    for it in itens:
+                        try:
+                            tam = it.get("tam", "")
+                            qtd = int(it.get("qtd", 0))
+                            cap = obter_capacidade(d.get("cliente", ""), tam)
+                            caixas = math.ceil(qtd / cap)
+                            st.markdown(f"- **{tam}** — {qtd} un — **{caixas} caixa(s)** *(cap. {cap}/cx)*")
+                        except Exception:
+                            st.markdown(f"- {it}")
+                    if d.get("agendamento"):
+                        st.markdown(f"📅 **Agendamento:** {d.get('agendamento')}")
+                    if d.get("referencia"):
+                        st.markdown(f"📝 **Referência:** {d.get('referencia')}")
 
-                if isinstance(d.get('itens'), list) and len(d['itens']) > 0:
-                    st.markdown("**📦 Medidas e caixas:**")
-                    for it in d['itens']:
-                        tam, qtd = it['tam'], int(it['qtd'])
-                        cap = obter_capacidade(d['cliente'], tam)
-                        caixas = math.ceil(qtd / cap)
-                        txt_cx = "caixa" if caixas == 1 else "caixas"
-                        st.markdown(f"- **{tam}** · {qtd} un · **{caixas} {txt_cx}** · Cap: {cap}/cx")
-
-                if d.get('agendamento'):
-                    st.markdown(f"<div class='info-line'>📅 <b>Agendamento:</b> {d['agendamento']}</div>", unsafe_allow_html=True)
-                if d.get('referencia'):
-                    st.markdown(f"<div class='info-line'>📝 <b>Referência:</b> {d['referencia']}</div>", unsafe_allow_html=True)
-
-                st.write("---")
-                st.markdown("**Etapas da produção**")
-                mudou_algo = False
-                etapa_cols = st.columns(3)
-                for i, etapa in enumerate(ETAPAS_PRODUCAO):
-                    with etapa_cols[i % 3]:
-                        v = st.checkbox(etapa, value=etapas.get(etapa, False), key=f"c{d['id']}{i}")
-                    if v != etapas.get(etapa, False):
-                        etapas[etapa] = v
-                        mudou_algo = True
-                if mudou_algo:
-                    atualizar_etapas(d['id'], etapas)
-                    st.toast("Etapas atualizadas.")
-
-                st.write("---")
-                st.markdown("**Ações**")
-                a1, a2, a3 = st.columns(3)
-                b1, b2 = st.columns(2)
-                if a1.button("✏️ Editar", key=f"ed_{d['id']}"):
-                    ir_para_editar_demanda(d)
-                    st.rerun()
-                if a2.button("🗑️ Excluir", key=f"del_{d['id']}"):
-                    if excluir_demanda_bd(d['id']):
+                with cinfo2:
+                    st.markdown("**⚙️ Ações**")
+                    b1, b2 = st.columns(2)
+                    if b1.button("✏️ Editar", key=f"ed_{d['id']}"):
+                        st.session_state.modo_demanda = "editar"
+                        st.session_state.demanda_edit = d
+                        st.session_state.itens_temp = itens.copy() if isinstance(itens, list) else []
                         st.rerun()
-                if a3.button("📄 Extrair", key=f"etq_{d['id']}"):
-                    ir_para_etiquetas(d)
-                    st.rerun()
-                if b1.button("⬆️ Subir", key=f"up_{d['id']}"):
-                    if idx > 0:
-                        mover_demanda(d, demandas_do_dia[idx-1], idx, idx-1)
-                if b2.button("⬇️ Descer", key=f"down_{d['id']}"):
-                    if idx < len(demandas_do_dia) - 1:
-                        mover_demanda(d, demandas_do_dia[idx+1], idx, idx+1)
+                    if b2.button("🗑️ Excluir", key=f"del_{d['id']}"):
+                        excluir_demanda(d)
 
-# ------------------------------------------------------------------------------
-# MODO: GERADOR DE TXT PARA ETIQUETAS INDIVIDUAL
-# ------------------------------------------------------------------------------
-elif st.session_state.modo_demanda == 'etiquetas':
+                    b3, b4 = st.columns(2)
+                    if b3.button("⬆️ Subir", key=f"up_{d['id']}", disabled=idx_global <= 0):
+                        mover_demanda(d, demandas_do_dia[idx_global - 1], idx_global, idx_global - 1)
+                    if b4.button("⬇️ Descer", key=f"down_{d['id']}", disabled=idx_global >= len(demandas_do_dia) - 1):
+                        mover_demanda(d, demandas_do_dia[idx_global + 1], idx_global, idx_global + 1)
+
+                st.write("---")
+                with st.form(key=f"form_etapas_{d['id']}"):
+                    st.markdown("**✅ Etapas da produção**")
+                    etapas_atuais = d.get("etapas", {}) or {}
+                    novas_etapas = {}
+                    cols_etapas = st.columns(3)
+                    for i, etapa in enumerate(ETAPAS_PRODUCAO):
+                        with cols_etapas[i % 3]:
+                            novas_etapas[etapa] = st.checkbox(etapa, value=etapas_atuais.get(etapa, False), key=f"chk_{d['id']}_{i}")
+                    if st.form_submit_button("💾 Salvar etapas"):
+                        try:
+                            supabase.table("demandas").update({"etapas": novas_etapas}).eq("id", d["id"]).execute()
+                            limpar_cache()
+                            st.success("Etapas salvas.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro ao salvar etapas: {e}")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+# ==============================================================================
+# 📄 MODO ETIQUETAS
+# ==============================================================================
+elif st.session_state.modo_demanda == "etiquetas":
     d = st.session_state.demanda_etiqueta
-    st.markdown("<div class='section-card'><h3>📄 Dados para etiquetas</h3></div>", unsafe_allow_html=True)
-    st.info(f"Cliente original: **{d['cliente']}** | NF: **{d['nf']}**")
-
-    conteudo_txt = montar_txt_etiquetas([d])
-
-    with st.container(border=True):
-        st.write("📦 **Resumo para o arquivo:**")
-        for it in d.get('itens', []):
-            tam = it['tam']
-            cap = obter_capacidade(d['cliente'], tam)
-            st.write(f"- {tam} → quantidade da etiqueta: **{cap} unidades**")
-
-        st.write("---")
-        st.text_area("Preview do TXT", conteudo_txt, height=260)
+    if not d:
+        st.warning("Nenhuma demanda selecionada.")
+        if st.button("Voltar"):
+            voltar_lista()
+            st.rerun()
+    else:
+        st.markdown("### 📄 Dados para etiquetas")
+        st.info(f"Cliente: **{d.get('cliente', '')}** | NF: **{d.get('nf', '')}**")
+        conteudo_txt = gerar_txt_etiquetas([d])
+        st.code(conteudo_txt, language="text")
         st.download_button(
-            "📥 BAIXAR DOCUMENTO DE TEXTO (.TXT)",
+            "📥 Baixar TXT de etiquetas",
             data=conteudo_txt,
-            file_name=f"DADOS_ETIQUETA_NF_{d['nf']}.txt",
+            file_name=f"DADOS_ETIQUETA_NF_{d.get('nf', '')}.txt",
             mime="text/plain",
             use_container_width=True,
         )
+        if st.button("❌ Voltar ao painel"):
+            voltar_lista()
+            st.rerun()
 
-    if st.button("❌ VOLTAR AO PAINEL", use_container_width=True):
-        ir_para_lista()
-        st.rerun()
-
-# ------------------------------------------------------------------------------
-# MODO: NOVA OU EDITAR DEMANDA
-# ------------------------------------------------------------------------------
-elif st.session_state.modo_demanda in ['nova', 'editar']:
-    is_edit = st.session_state.modo_demanda == 'editar'
-    d_edit = st.session_state.demanda_edit if is_edit else {}
-    st.markdown(f"<div class='section-card'><h3>{'✏️ Editar Demanda' if is_edit else '➕ Nova Demanda'}</h3></div>", unsafe_allow_html=True)
+# ==============================================================================
+# ➕ MODO NOVA / EDITAR
+# ==============================================================================
+elif st.session_state.modo_demanda in ["nova", "editar"]:
+    is_edit = st.session_state.modo_demanda == "editar"
+    d_edit = st.session_state.demanda_edit if is_edit and st.session_state.demanda_edit else {}
+    st.markdown(f"### {'✏️ Editar demanda' if is_edit else '➕ Nova demanda'}")
 
     with st.container(border=True):
-        f1, f2 = st.columns([2, 1])
-        with f1:
-            cli_d = st.text_input("Nome do cliente:", value=d_edit.get('cliente', '')).strip().upper()
-        with f2:
-            nf_d = st.text_input("Número da NF:", value=d_edit.get('nf', '')).strip().upper()
+        with st.form("form_demanda_principal"):
+            cli_d = st.text_input("Nome do cliente:", value=d_edit.get("cliente", "")).strip().upper()
+            nf_d = st.text_input("Número da NF:", value=d_edit.get("nf", "")).strip().upper()
+            txt_agend = st.text_input("Agendamento:", value=d_edit.get("agendamento", "")).strip().upper()
+            txt_ref = st.text_area("Referência:", value=d_edit.get("referencia", "")).strip().upper()
+            salvar = st.form_submit_button("✅ Salvar demanda")
 
-        nf_duplicada = False
-        if nf_d:
-            if not is_edit or (is_edit and nf_d != d_edit.get('nf', '').upper()):
-                try:
-                    busca = supabase.table("demandas").select("id").eq("nf", nf_d).execute()
-                    if len(busca.data) > 0:
-                        nf_duplicada = True
-                        st.error("⚠️ Este número de NF já foi utilizado!")
-                except Exception:
-                    pass
-
-        st.write("📦 **Itens da demanda:**")
-        if st.session_state.itens_temp:
+        st.write("---")
+        st.markdown("**📦 Itens adicionados**")
+        if not st.session_state.itens_temp:
+            st.caption("Nenhum item adicionado ainda.")
+        else:
             for i, item in enumerate(st.session_state.itens_temp):
                 c_it1, c_it2 = st.columns([5, 1])
-                c_it1.markdown(f"<span class='item-pill'>{item['qtd']} unidades · {item['tam']}</span>", unsafe_allow_html=True)
+                c_it1.markdown(f"• **{item.get('qtd', 0)}** unidades de **{item.get('tam', '')}**")
                 if c_it2.button("🗑️", key=f"rem_item_{i}"):
                     st.session_state.itens_temp.pop(i)
                     st.rerun()
-        else:
-            st.caption("Nenhuma medida adicionada ainda.")
 
-        st.write("---")
-        c_m1, c_m2, c_m3 = st.columns([2, 2, 2])
-        t_med = c_m1.selectbox("Medida:", ["30x40", "60x40", "90x60"])
-        t_qtd = c_m2.number_input("QTD:", min_value=1, value=1)
-        if c_m3.button("➕ Adicionar Medida", use_container_width=True):
-            st.session_state.itens_temp.append({"tam": t_med, "qtd": t_qtd})
-            st.rerun()
+        with st.form("form_adicionar_item"):
+            c_m1, c_m2 = st.columns([1, 1])
+            t_med = c_m1.selectbox("Medida:", ["30x40", "60x40", "90x60"])
+            t_qtd = c_m2.number_input("QTD:", min_value=1, value=1, step=1)
+            add_item = st.form_submit_button("➕ Adicionar medida")
+            if add_item:
+                st.session_state.itens_temp.append({"tam": t_med, "qtd": int(t_qtd)})
+                st.rerun()
 
-        st.write("---")
-        txt_agend = st.text_input("Agendamento:", value=d_edit.get('agendamento', '')).strip().upper()
-        txt_ref = st.text_area("Referência:", value=d_edit.get('referencia', '')).strip().upper()
-
-        c_salvar, c_voltar = st.columns(2)
-        if c_salvar.button("✅ SALVAR NA NUVEM", use_container_width=True):
+        if salvar:
+            nf_duplicada = validar_nf_duplicada(nf_d, is_edit=is_edit, id_atual=d_edit.get("id"))
             if nf_duplicada:
-                st.error("⚠️ Corrija o número da NF antes de salvar. Essa nota já existe no sistema!")
-            elif cli_d and nf_d and len(st.session_state.itens_temp) > 0:
+                st.error("⚠️ Esta NF já existe. Corrija antes de salvar.")
+            elif not cli_d or not nf_d or len(st.session_state.itens_temp) == 0:
+                st.warning("⚠️ Preencha cliente, NF e adicione pelo menos uma medida.")
+            else:
                 dados = {
-                    "data": st.session_state.data_foco.strftime("%Y-%m-%d") if not is_edit else d_edit['data'],
+                    "data": d_edit.get("data", data_str) if is_edit else data_str,
                     "cliente": cli_d,
                     "nf": nf_d,
                     "itens": st.session_state.itens_temp,
                     "agendamento": txt_agend,
                     "referencia": txt_ref,
                 }
-                salvou = False
-                if is_edit:
-                    salvou = atualizar_demanda_bd(d_edit['id'], dados)
-                else:
-                    dados["etapas"] = {etapa: False for etapa in ETAPAS_PRODUCAO}
-                    dados["ordem"] = 999
-                    salvou = inserir_demanda_bd(dados)
-                if salvou:
-                    st.session_state.modo_demanda = 'lista'
-                    st.session_state.itens_temp = []
+                try:
+                    if is_edit:
+                        supabase.table("demandas").update(dados).eq("id", d_edit["id"]).execute()
+                    else:
+                        dados["etapas"] = {etapa: False for etapa in ETAPAS_PRODUCAO}
+                        dados["ordem"] = 999
+                        supabase.table("demandas").insert(dados).execute()
+                    limpar_cache()
+                    voltar_lista()
+                    st.success("Demanda salva.")
                     st.rerun()
-            else:
-                st.warning("⚠️ Preencha Nome, NF e adicione uma medida!")
+                except Exception as e:
+                    st.error(f"Erro ao salvar: {e}")
 
-        if c_voltar.button("❌ VOLTAR", use_container_width=True):
-            ir_para_lista()
-            st.session_state.itens_temp = []
-            st.rerun()
+    if st.button("❌ Voltar sem salvar"):
+        voltar_lista()
+        st.rerun()
