@@ -316,27 +316,62 @@ if 'demanda_etiqueta' not in st.session_state:
 # 🧹 FUNÇÕES TÉCNICAS E BANCO DE DADOS
 # ==============================================================================
 def limpar_demandas_antigas():
+    """Limpeza manual. Não roda automaticamente para não deixar o painel lento."""
     try:
         data_limite = datetime.date.today() - datetime.timedelta(days=5)
         data_limite_str = data_limite.strftime("%Y-%m-%d")
         supabase.table("demandas").delete().lt("data", data_limite_str).execute()
-    except Exception:
-        pass
+        carregar_demandas_data.clear()
+        st.success("Demandas antigas removidas com sucesso.")
+    except Exception as e:
+        st.error(f"Erro ao limpar demandas antigas: {e}")
 
 
-def carregar_bd():
-    limpar_demandas_antigas()
+@st.cache_data(ttl=20, show_spinner=False)
+def carregar_demandas_data(data_str):
+    """Busca somente as demandas da data selecionada. Muito mais rápido que baixar o banco inteiro."""
     try:
-        resposta = supabase.table("demandas").select("*").execute()
-        bd_organizado = {}
-        for d in resposta.data:
-            data_str = str(d['data'])
-            if data_str not in bd_organizado:
-                bd_organizado[data_str] = []
-            bd_organizado[data_str].append(d)
-        return bd_organizado
-    except Exception:
-        return {}
+        resposta = (
+            supabase.table("demandas")
+            .select("*")
+            .eq("data", data_str)
+            .order("ordem")
+            .execute()
+        )
+        return resposta.data or []
+    except Exception as e:
+        st.error(f"Erro ao carregar demandas do dia: {e}")
+        return []
+
+
+def atualizar_demanda_bd(demanda_id, dados):
+    try:
+        supabase.table("demandas").update(dados).eq("id", demanda_id).execute()
+        carregar_demandas_data.clear()
+        return True
+    except Exception as e:
+        st.error(f"Erro ao atualizar demanda: {e}")
+        return False
+
+
+def inserir_demanda_bd(dados):
+    try:
+        supabase.table("demandas").insert(dados).execute()
+        carregar_demandas_data.clear()
+        return True
+    except Exception as e:
+        st.error(f"Erro ao salvar: {e}")
+        return False
+
+
+def excluir_demanda_bd(demanda_id):
+    try:
+        supabase.table("demandas").delete().eq("id", demanda_id).execute()
+        carregar_demandas_data.clear()
+        return True
+    except Exception as e:
+        st.error(f"Erro ao excluir demanda: {e}")
+        return False
 
 
 def mover_demanda(d_atual, d_alvo, idx_atual, idx_alvo):
@@ -347,9 +382,38 @@ def mover_demanda(d_atual, d_alvo, idx_atual, idx_alvo):
     try:
         supabase.table("demandas").update({"ordem": ordem_alvo}).eq("id", d_atual['id']).execute()
         supabase.table("demandas").update({"ordem": ordem_atual}).eq("id", d_alvo['id']).execute()
+        carregar_demandas_data.clear()
         st.rerun()
-    except Exception:
-        st.error("Erro ao mover card.")
+    except Exception as e:
+        st.error(f"Erro ao mover card: {e}")
+
+
+def atualizar_etapas(demanda_id, etapas):
+    """Atualiza etapas sem forçar st.rerun extra; o próprio checkbox já recarrega a tela."""
+    atualizar_demanda_bd(demanda_id, {"etapas": etapas})
+
+
+def ir_para_lista():
+    st.session_state.modo_demanda = 'lista'
+    st.session_state.demanda_edit = None
+    st.session_state.demanda_etiqueta = None
+
+
+def ir_para_nova_demanda():
+    st.session_state.modo_demanda = 'nova'
+    st.session_state.itens_temp = []
+    st.session_state.demanda_edit = None
+
+
+def ir_para_editar_demanda(d):
+    st.session_state.modo_demanda = 'editar'
+    st.session_state.demanda_edit = d
+    st.session_state.itens_temp = d['itens'] if isinstance(d.get('itens'), list) else []
+
+
+def ir_para_etiquetas(d):
+    st.session_state.demanda_etiqueta = d
+    st.session_state.modo_demanda = 'etiquetas'
 
 
 def status_demanda(etapas):
@@ -429,7 +493,7 @@ st.markdown(
     """
     <div class="eco-header">
         <div class="eco-title">ECO DECOR · DEMANDA DIÁRIA</div>
-        <div class="eco-subtitle">Painel de acompanhamento de produção, etiquetas e entrega</div>
+        <div class="eco-subtitle">Painel rápido de produção, etiquetas e entrega</div>
         <div class="mobile-note">Versão otimizada para celular</div>
     </div>
     """,
@@ -448,14 +512,14 @@ if nav_prox.button("▶", key="btn_prox", use_container_width=True):
     st.session_state.data_foco += datetime.timedelta(days=1)
     st.rerun()
 
-bd = carregar_bd()
 data_str = st.session_state.data_foco.strftime("%Y-%m-%d")
+demandas_do_dia_cache = carregar_demandas_data(data_str)
 
 # ------------------------------------------------------------------------------
 # MODO: LISTA KANBAN
 # ------------------------------------------------------------------------------
 if st.session_state.modo_demanda == 'lista':
-    demandas_do_dia = bd.get(data_str, [])
+    demandas_do_dia = list(demandas_do_dia_cache)
     demandas_do_dia.sort(key=lambda x: (x.get('ordem') if x.get('ordem') is not None else 999, x['id']))
 
     total_demandas = len(demandas_do_dia)
@@ -470,11 +534,13 @@ if st.session_state.modo_demanda == 'lista':
     with m4: render_metric("Finalizadas", finalizadas)
 
     st.write("")
-    c_topo1, c_topo2 = st.columns([1, 1])
+    c_topo1, c_topo2, c_topo3 = st.columns([1, 1, 1])
     if c_topo1.button("➕ ADICIONAR NOVA DEMANDA", use_container_width=True):
-        st.session_state.modo_demanda = 'nova'
-        st.session_state.itens_temp = []
-        st.session_state.demanda_edit = None
+        ir_para_nova_demanda()
+        st.rerun()
+
+    if c_topo3.button("🔄 ATUALIZAR", use_container_width=True):
+        carregar_demandas_data.clear()
         st.rerun()
 
     if demandas_do_dia:
@@ -525,24 +591,21 @@ if st.session_state.modo_demanda == 'lista':
                         etapas[etapa] = v
                         mudou_algo = True
                 if mudou_algo:
-                    supabase.table("demandas").update({"etapas": etapas}).eq("id", d['id']).execute()
-                    st.rerun()
+                    atualizar_etapas(d['id'], etapas)
+                    st.toast("Etapas atualizadas.")
 
                 st.write("---")
                 st.markdown("**Ações**")
                 a1, a2, a3 = st.columns(3)
                 b1, b2 = st.columns(2)
                 if a1.button("✏️ Editar", key=f"ed_{d['id']}"):
-                    st.session_state.modo_demanda = 'editar'
-                    st.session_state.demanda_edit = d
-                    st.session_state.itens_temp = d['itens'] if isinstance(d['itens'], list) else []
+                    ir_para_editar_demanda(d)
                     st.rerun()
                 if a2.button("🗑️ Excluir", key=f"del_{d['id']}"):
-                    supabase.table("demandas").delete().eq("id", d['id']).execute()
-                    st.rerun()
+                    if excluir_demanda_bd(d['id']):
+                        st.rerun()
                 if a3.button("📄 Extrair", key=f"etq_{d['id']}"):
-                    st.session_state.demanda_etiqueta = d
-                    st.session_state.modo_demanda = 'etiquetas'
+                    ir_para_etiquetas(d)
                     st.rerun()
                 if b1.button("⬆️ Subir", key=f"up_{d['id']}"):
                     if idx > 0:
@@ -579,7 +642,7 @@ elif st.session_state.modo_demanda == 'etiquetas':
         )
 
     if st.button("❌ VOLTAR AO PAINEL", use_container_width=True):
-        st.session_state.modo_demanda = 'lista'
+        ir_para_lista()
         st.rerun()
 
 # ------------------------------------------------------------------------------
@@ -644,22 +707,21 @@ elif st.session_state.modo_demanda in ['nova', 'editar']:
                     "agendamento": txt_agend,
                     "referencia": txt_ref,
                 }
-                try:
-                    if is_edit:
-                        supabase.table("demandas").update(dados).eq("id", d_edit['id']).execute()
-                    else:
-                        dados["etapas"] = {etapa: False for etapa in ETAPAS_PRODUCAO}
-                        dados["ordem"] = 999
-                        supabase.table("demandas").insert(dados).execute()
+                salvou = False
+                if is_edit:
+                    salvou = atualizar_demanda_bd(d_edit['id'], dados)
+                else:
+                    dados["etapas"] = {etapa: False for etapa in ETAPAS_PRODUCAO}
+                    dados["ordem"] = 999
+                    salvou = inserir_demanda_bd(dados)
+                if salvou:
                     st.session_state.modo_demanda = 'lista'
                     st.session_state.itens_temp = []
                     st.rerun()
-                except Exception as e:
-                    st.error(f"Erro ao salvar: {e}")
             else:
                 st.warning("⚠️ Preencha Nome, NF e adicione uma medida!")
 
         if c_voltar.button("❌ VOLTAR", use_container_width=True):
-            st.session_state.modo_demanda = 'lista'
+            ir_para_lista()
             st.session_state.itens_temp = []
             st.rerun()
