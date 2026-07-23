@@ -242,7 +242,12 @@ def obter_capacidade(cliente, tam):
         return 24
     if tam == "30x40":
         return 47
-    return 1
+    return None
+
+
+def usa_caixas(tam):
+    """Adesivos 55x35 são controlados por chapas, não por caixas."""
+    return tam != "55x35"
 
 
 def linha_cliente_etiqueta(cliente):
@@ -265,11 +270,14 @@ def gerar_txt_etiquetas(demandas, data_label=None):
         linha_cli = linha_cliente_etiqueta(dem.get("cliente", ""))
         for it in dem.get("itens", []) or []:
             tam = it.get("tam", "")
+            qtd = int(it.get("qtd", 0))
             cap = obter_capacidade(dem.get("cliente", ""), tam)
             linhas.append(f"NF: {dem.get('nf', '')}")
             linhas.append(linha_cli)
             linhas.append(f"MEDIDA: {tam}")
-            linhas.append(f"QUANTIDADE: {cap} unidades")
+            linhas.append(
+                f"QUANTIDADE: {cap if usa_caixas(tam) else qtd} unidades"
+            )
             linhas.append("-" * 30)
     return "\n".join(linhas)
 
@@ -291,7 +299,10 @@ def total_caixas(demandas):
         for it in d.get("itens", []) or []:
             try:
                 qtd = int(it.get("qtd", 0))
-                cap = obter_capacidade(d.get("cliente", ""), it.get("tam", ""))
+                tam = it.get("tam", "")
+                if not usa_caixas(tam):
+                    continue
+                cap = obter_capacidade(d.get("cliente", ""), tam)
                 caixas += math.ceil(qtd / cap) if cap else 0
             except Exception:
                 pass
@@ -509,11 +520,14 @@ if st.session_state.modo_demanda == "lista":
             with st.expander("Abrir detalhes e etapas", expanded=False):
                 cinfo1, cinfo2 = st.columns([1, 1])
                 with cinfo1:
-                    st.markdown("**📦 Medidas e caixas**")
+                    st.markdown("**📦 Medidas e quantidades**")
                     for it in itens:
                         try:
                             tam = it.get("tam", "")
                             qtd = int(it.get("qtd", 0))
+                            if not usa_caixas(tam):
+                                st.markdown(f"- **{tam}** — **{qtd} chapas**")
+                                continue
                             cap = obter_capacidade(d.get("cliente", ""), tam)
                             caixas = math.ceil(qtd / cap)
                             st.markdown(f"- **{tam}** — {qtd} un — **{caixas} caixa(s)** *(cap. {cap}/cx)*")
@@ -616,7 +630,7 @@ elif st.session_state.modo_demanda in ["nova", "editar"]:
 
         with st.form("form_adicionar_item"):
             c_m1, c_m2 = st.columns([1, 1])
-            t_med = c_m1.selectbox("Medida:", ["30x40", "60x40", "90x60"])
+            t_med = c_m1.selectbox("Medida:", ["30x40", "55x35", "60x40", "90x60"])
             t_qtd = c_m2.number_input("QTD:", min_value=1, value=1, step=1)
             add_item = st.form_submit_button("➕ Adicionar medida")
             if add_item:
