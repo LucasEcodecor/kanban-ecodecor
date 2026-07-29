@@ -240,6 +240,8 @@ def obter_capacidade(cliente, tam):
         return 10 if is_bigodinho else 11
     if tam == "60x40":
         return 24
+    if tam == "50x20":
+        return 9
     if tam == "30x40":
         return 47
     return None
@@ -630,7 +632,10 @@ elif st.session_state.modo_demanda in ["nova", "editar"]:
 
         with st.form("form_adicionar_item"):
             c_m1, c_m2 = st.columns([1, 1])
-            t_med = c_m1.selectbox("Medida:", ["30x40", "55x35", "60x40", "90x60"])
+            t_med = c_m1.selectbox(
+                "Medida:",
+                ["30x40", "50x20", "55x35", "60x40", "90x60"],
+            )
             t_qtd = c_m2.number_input("QTD:", min_value=1, value=1, step=1)
             add_item = st.form_submit_button("➕ Adicionar medida")
             if add_item:
