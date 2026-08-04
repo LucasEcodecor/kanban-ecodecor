@@ -61,6 +61,18 @@ st.markdown("""
     }
     .demand-title { font-size: 17px; font-weight: 900; color: #f8fafc; }
     .demand-meta { color: #cbd5e1; font-size: 13px; margin-top: 4px; }
+    .date-badge {
+        display: inline-block;
+        background-color: #1e3a8a;
+        color: #dbeafe;
+        border: 1px solid #3b82f6;
+        border-radius: 999px;
+        padding: 6px 10px;
+        font-size: 13px;
+        font-weight: 900;
+        text-align: center;
+        margin-bottom: 8px;
+    }
     .status-badge {
         display:inline-block;
         padding: 5px 10px;
@@ -114,6 +126,7 @@ st.markdown("""
     }
     .alert-critico { border-color: #dc2626; }
     .alert-atencao { border-color: #eab308; }
+    .alert-sucesso { border-color: #16a34a; }
     .alert-info { border-color: #2563eb; }
 
     /* ===============================================================
@@ -588,7 +601,7 @@ def gerar_alertas_demandas(_demandas_do_dia, data_referencia):
             if id_nova not in ids_notificacao:
                 notificacoes.append({
                     "id": id_nova,
-                    "nivel": "info",
+                    "nivel": "critico",
                     "tipo": "nova",
                     "titulo": f"Nova demanda — NF {nf}",
                     "texto": f"{cliente} • {medidas} • Data: {data_demanda} • 0/{len(ETAPAS_PRODUCAO)} etapas.",
@@ -600,7 +613,7 @@ def gerar_alertas_demandas(_demandas_do_dia, data_referencia):
             id_finalizada = f"finalizada_{demanda_id}_{_agora_iso()}"
             notificacoes.append({
                 "id": id_finalizada,
-                "nivel": "atencao",
+                "nivel": "sucesso",
                 "tipo": "finalizada",
                 "titulo": f"Demanda finalizada — NF {nf}",
                 "texto": f"{cliente} • {medidas} • Data: {data_demanda} • {marcadas}/{len(ETAPAS_PRODUCAO)} etapas.",
@@ -619,7 +632,7 @@ def gerar_alertas_demandas(_demandas_do_dia, data_referencia):
     dados["notificacoes"] = notificacoes
     _salvar_notificacoes_local(dados)
 
-    prioridade = {"atencao": 0, "info": 1}
+    prioridade = {"critico": 0, "sucesso": 1, "info": 2}
     notificacoes.sort(
         key=lambda item: (
             prioridade.get(item.get("nivel"), 9),
@@ -653,7 +666,7 @@ def mostrar_painel_alertas(alertas):
         for alerta in alertas[:12]:
             classe = {
                 "critico": "alert-critico",
-                "atencao": "alert-atencao",
+                "sucesso": "alert-sucesso",
                 "info": "alert-info",
             }.get(alerta["nivel"], "alert-info")
             st.markdown(
@@ -821,9 +834,15 @@ if st.session_state.modo_demanda == "lista":
             with col_a:
                 st.markdown(f"<div class='demand-title'>{d.get('cliente', '')}</div>", unsafe_allow_html=True)
                 data_card = d.get("data", data_str)
-                st.markdown(f"<div class='demand-meta'>NF: <b>{d.get('nf', '')}</b> • {medidas_str} • Data: <b>{data_card}</b></div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='demand-meta'>NF: <b>{d.get('nf', '')}</b> • {medidas_str}</div>", unsafe_allow_html=True)
                 st.markdown(f"<span class='status-badge {classe}'>{icone} {marcadas}/{len(ETAPAS_PRODUCAO)}</span>", unsafe_allow_html=True)
             with col_b:
+                data_formatada = data_card
+                try:
+                    data_formatada = datetime.datetime.strptime(str(data_card), "%Y-%m-%d").strftime("%d/%m/%Y")
+                except Exception:
+                    pass
+                st.markdown(f"<div style='text-align:right;'><span class='date-badge'>📅 {data_formatada}</span></div>", unsafe_allow_html=True)
                 if st.button("📄 Etiquetas", key=f"etq_{d['id']}"):
                     st.session_state.demanda_etiqueta = d
                     st.session_state.modo_demanda = "etiquetas"
