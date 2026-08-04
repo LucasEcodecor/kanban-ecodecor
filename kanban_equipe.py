@@ -113,16 +113,33 @@ st.markdown("""
         padding: 12px 14px;
         margin: 8px 0;
     }
+    .alert-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 5px;
+    }
     .alert-title {
         color: #f8fafc;
         font-size: 15px;
         font-weight: 900;
-        margin-bottom: 4px;
+        margin-bottom: 0;
     }
     .alert-meta {
         color: #cbd5e1;
         font-size: 12.5px;
         line-height: 1.35;
+    }
+    .alert-date {
+        background-color: #1e3a8a;
+        color: #dbeafe;
+        border: 1px solid #3b82f6;
+        border-radius: 999px;
+        padding: 4px 9px;
+        font-size: 12px;
+        font-weight: 900;
+        white-space: nowrap;
     }
     .alert-critico { border-color: #dc2626; }
     .alert-atencao { border-color: #eab308; }
@@ -604,7 +621,8 @@ def gerar_alertas_demandas(_demandas_do_dia, data_referencia):
                     "nivel": "critico",
                     "tipo": "nova",
                     "titulo": f"Nova demanda — NF {nf}",
-                    "texto": f"{cliente} • {medidas} • Data: {data_demanda} • 0/{len(ETAPAS_PRODUCAO)} etapas.",
+                    "texto": f"{cliente} • {medidas} • 0/{len(ETAPAS_PRODUCAO)} etapas.",
+                    "data": data_demanda,
                     "criado_em": _agora_iso(),
                 })
                 ids_notificacao.add(id_nova)
@@ -616,7 +634,8 @@ def gerar_alertas_demandas(_demandas_do_dia, data_referencia):
                 "nivel": "sucesso",
                 "tipo": "finalizada",
                 "titulo": f"Demanda finalizada — NF {nf}",
-                "texto": f"{cliente} • {medidas} • Data: {data_demanda} • {marcadas}/{len(ETAPAS_PRODUCAO)} etapas.",
+                "texto": f"{cliente} • {medidas} • {marcadas}/{len(ETAPAS_PRODUCAO)} etapas.",
+                "data": data_demanda,
                 "criado_em": _agora_iso(),
             })
 
@@ -643,6 +662,39 @@ def gerar_alertas_demandas(_demandas_do_dia, data_referencia):
     return notificacoes
 
 
+def _formatar_data_alerta(alerta):
+    data_raw = str(alerta.get("data", "") or "")
+    if not data_raw:
+        encontrado = re.search(r"Data:\s*(\d{4}-\d{2}-\d{2})", str(alerta.get("texto", "")))
+        data_raw = encontrado.group(1) if encontrado else ""
+    if not data_raw:
+        return ""
+    try:
+        return datetime.datetime.strptime(data_raw, "%Y-%m-%d").strftime("%d/%m/%Y")
+    except Exception:
+        return data_raw
+
+
+def _texto_alerta_limpo(alerta):
+    texto = str(alerta.get("texto", ""))
+    texto = re.sub(r"\s*•\s*Data:\s*\d{4}-\d{2}-\d{2}", "", texto)
+    return texto
+
+
+def _classe_alerta(alerta):
+    tipo = str(alerta.get("tipo", "")).lower()
+    titulo = str(alerta.get("titulo", "")).lower()
+    if tipo == "finalizada" or "finalizada" in titulo:
+        return "alert-sucesso"
+    if tipo == "nova" or "nova demanda" in titulo:
+        return "alert-critico"
+    return {
+        "critico": "alert-critico",
+        "sucesso": "alert-sucesso",
+        "info": "alert-info",
+    }.get(alerta.get("nivel"), "alert-info")
+
+
 def mostrar_painel_alertas(alertas):
     finalizadas = sum(1 for item in alertas if "finalizada" in item["titulo"].lower())
     novas = sum(1 for item in alertas if "nova demanda" in item["titulo"].lower())
@@ -664,16 +716,17 @@ def mostrar_painel_alertas(alertas):
         c2.metric("Finalizadas", finalizadas)
 
         for alerta in alertas[:12]:
-            classe = {
-                "critico": "alert-critico",
-                "sucesso": "alert-sucesso",
-                "info": "alert-info",
-            }.get(alerta["nivel"], "alert-info")
+            classe = _classe_alerta(alerta)
+            data_alerta = _formatar_data_alerta(alerta)
+            texto_alerta = _texto_alerta_limpo(alerta)
             st.markdown(
                 f"""
                 <div class="alert-box {classe}">
-                    <div class="alert-title">{alerta["titulo"]}</div>
-                    <div class="alert-meta">{alerta["texto"]}</div>
+                    <div class="alert-head">
+                        <div class="alert-title">{alerta["titulo"]}</div>
+                        <div class="alert-date">📅 {data_alerta}</div>
+                    </div>
+                    <div class="alert-meta">{texto_alerta}</div>
                 </div>
                 """,
                 unsafe_allow_html=True,
