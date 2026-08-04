@@ -557,8 +557,8 @@ def gerar_alertas_demandas(_demandas_do_dia, data_referencia):
     """Avisa somente eventos importantes de todos os dias próximos.
 
     Não altera dados no Supabase. O histórico é local e cada notificação fica
-    visível por 24 horas:
-    - demanda nova;
+    visível por 24 horas quando necessário:
+    - toda demanda sem etapa marcada, status 0/9;
     - demanda que ficou finalizada.
     """
     dados = _ler_notificacoes_local()
@@ -569,7 +569,7 @@ def gerar_alertas_demandas(_demandas_do_dia, data_referencia):
     ]
 
     demandas_janela = carregar_demandas_janela_notificacao(data_referencia)
-    primeira_execucao = not bool(vistos)
+    ids_notificacao = {item.get("id") for item in notificacoes}
 
     for demanda in demandas_janela:
         demanda_id = str(demanda.get("id") or demanda.get("nf") or "")
@@ -583,18 +583,23 @@ def gerar_alertas_demandas(_demandas_do_dia, data_referencia):
         medidas = _texto_medidas(demanda)
         anterior = vistos.get(demanda_id)
 
-        if not primeira_execucao and anterior is None:
+        if marcadas == 0:
+            id_nova = f"nova_{demanda_id}"
+            if id_nova not in ids_notificacao:
+                notificacoes.append({
+                    "id": id_nova,
+                    "nivel": "info",
+                    "tipo": "nova",
+                    "titulo": f"Nova demanda — NF {nf}",
+                    "texto": f"{cliente} • {medidas} • Data: {data_demanda} • 0/{len(ETAPAS_PRODUCAO)} etapas.",
+                    "criado_em": _agora_iso(),
+                })
+                ids_notificacao.add(id_nova)
+
+        if anterior and anterior.get("status") != "finalizado" and classe == "finalizado":
+            id_finalizada = f"finalizada_{demanda_id}_{_agora_iso()}"
             notificacoes.append({
-                "id": f"nova_{demanda_id}_{_agora_iso()}",
-                "nivel": "info",
-                "tipo": "nova",
-                "titulo": f"Nova demanda — NF {nf}",
-                "texto": f"{cliente} • {medidas} • Data: {data_demanda}.",
-                "criado_em": _agora_iso(),
-            })
-        elif anterior and anterior.get("status") != "finalizado" and classe == "finalizado":
-            notificacoes.append({
-                "id": f"finalizada_{demanda_id}_{_agora_iso()}",
+                "id": id_finalizada,
                 "nivel": "atencao",
                 "tipo": "finalizada",
                 "titulo": f"Demanda finalizada — NF {nf}",
@@ -636,7 +641,7 @@ def mostrar_painel_alertas(alertas):
         if not alertas:
             st.success("Nenhuma novidade importante desde a última atualização da tela.")
             st.caption(
-                "O painel avisa por 24 horas quando entra demanda nova ou quando uma demanda fica finalizada, "
+                "O painel mostra como nova toda demanda em 0/9 etapas e avisa por 24 horas quando uma demanda fica finalizada, "
                 "mesmo que a demanda seja de amanhã ou dos próximos dias."
             )
             return
