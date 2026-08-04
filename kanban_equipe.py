@@ -262,6 +262,13 @@ ETAPAS_PRODUCAO = [
     "LIBERADO PARA ENTREGA (MICHELLI)",
 ]
 
+ETAPAS_COMPATIBILIDADE = {
+    "CORTE EM ANDAMENTO (CASSIO)": "CORTE EM ANDAMENTO (DAVID)",
+    "CORTE FINALIZADO (CASSIO)": "CORTE FINALIZADO (DAVID)",
+    "PRODUÇÃO EM ANDAMENTO (GUSTAVO)": "PRODUÇÃO EM ANDAMENTO (SASKA)",
+    "PRODUÇÃO FINALIZADO (GUSTAVO)": "PRODUÇÃO FINALIZADO (SASKA)",
+}
+
 ARQUIVO_NOTIFICACOES = Path(__file__).resolve().parent / "notificacoes_kanban.json"
 HORAS_NOTIFICACAO = 24
 DIAS_NOTIFICACAO_PASSADO = 1
@@ -361,7 +368,7 @@ def total_caixas(demandas):
 
 def status_demanda(d):
     etapas = d.get("etapas", {}) or {}
-    marcadas = sum(1 for etapa in ETAPAS_PRODUCAO if etapas.get(etapa, False))
+    marcadas = sum(1 for etapa in ETAPAS_PRODUCAO if _etapa_marcada(etapas, etapa))
     if marcadas == len(ETAPAS_PRODUCAO):
         return "finalizado", "🟢", marcadas
     if marcadas > 0:
@@ -373,6 +380,11 @@ def _normalizar(valor):
     texto = unicodedata.normalize("NFKD", str(valor).strip().lower())
     texto = "".join(c for c in texto if not unicodedata.combining(c))
     return re.sub(r"[^a-z0-9]+", "", texto)
+
+
+def _etapa_marcada(etapas, etapa):
+    etapa_antiga = ETAPAS_COMPATIBILIDADE.get(etapa)
+    return bool(etapas.get(etapa, False) or (etapa_antiga and etapas.get(etapa_antiga, False)))
 
 
 @st.cache_data(ttl=20, show_spinner=False)
@@ -944,7 +956,7 @@ if st.session_state.modo_demanda == "lista":
                     cols_etapas = st.columns(3)
                     for i, etapa in enumerate(ETAPAS_PRODUCAO):
                         with cols_etapas[i % 3]:
-                            novas_etapas[etapa] = st.checkbox(etapa, value=etapas_atuais.get(etapa, False), key=f"chk_{d['id']}_{i}")
+                            novas_etapas[etapa] = st.checkbox(etapa, value=_etapa_marcada(etapas_atuais, etapa), key=f"chk_{d['id']}_{i}")
                     if st.form_submit_button("💾 Salvar etapas"):
                         try:
                             supabase.table("demandas").update({"etapas": novas_etapas}).eq("id", d["id"]).execute()
@@ -990,12 +1002,11 @@ elif st.session_state.modo_demanda in ["nova", "editar"]:
     st.markdown(f"### {'✏️ Editar demanda' if is_edit else '➕ Nova demanda'}")
 
     with st.container(border=True):
-        with st.form("form_demanda_principal"):
-            cli_d = st.text_input("Nome do cliente:", value=d_edit.get("cliente", "")).strip().upper()
-            nf_d = st.text_input("Número da NF:", value=d_edit.get("nf", "")).strip().upper()
-            txt_agend = st.text_input("Agendamento:", value=d_edit.get("agendamento", "")).strip().upper()
-            txt_ref = st.text_area("Referência:", value=d_edit.get("referencia", "")).strip().upper()
-            salvar = st.form_submit_button("✅ Salvar demanda")
+        st.markdown("**📝 Dados principais**")
+        cli_d = st.text_input("Nome do cliente:", value=d_edit.get("cliente", "")).strip().upper()
+        nf_d = st.text_input("Número da NF:", value=d_edit.get("nf", "")).strip().upper()
+        txt_agend = st.text_input("Agendamento:", value=d_edit.get("agendamento", "")).strip().upper()
+        txt_ref = st.text_area("Referência:", value=d_edit.get("referencia", "")).strip().upper()
 
         st.write("---")
         st.markdown("**📦 Itens adicionados**")
@@ -1017,6 +1028,18 @@ elif st.session_state.modo_demanda in ["nova", "editar"]:
             if add_item:
                 st.session_state.itens_temp.append({"tam": t_med, "qtd": int(t_qtd)})
                 st.rerun()
+
+        st.write("---")
+        st.markdown("**✅ Finalizar cadastro**")
+        col_salvar, col_voltar = st.columns([1, 1])
+        with col_salvar:
+            salvar = st.button("✅ Salvar demanda", type="primary", use_container_width=True)
+        with col_voltar:
+            voltar_sem_salvar = st.button("❌ Voltar sem salvar", use_container_width=True)
+
+        if voltar_sem_salvar:
+            voltar_lista()
+            st.rerun()
 
         if salvar:
             nf_duplicada = validar_nf_duplicada(nf_d, is_edit=is_edit, id_atual=d_edit.get("id"))
@@ -1046,7 +1069,3 @@ elif st.session_state.modo_demanda in ["nova", "editar"]:
                     st.rerun()
                 except Exception as e:
                     st.error(f"Erro ao salvar: {e}")
-
-    if st.button("❌ Voltar sem salvar"):
-        voltar_lista()
-        st.rerun()
