@@ -1,8 +1,10 @@
 import streamlit as st
 import datetime
+import json
 import math
 import re
 import unicodedata
+from pathlib import Path
 from supabase import create_client, Client
 
 # ==============================================================================
@@ -230,6 +232,11 @@ ETAPAS_PRODUCAO = [
     "LIBERADO PARA ENTREGA (MICHELLI)",
 ]
 
+ARQUIVO_NOTIFICACOES = Path(__file__).resolve().parent / "notificacoes_kanban.json"
+HORAS_NOTIFICACAO = 24
+DIAS_NOTIFICACAO_PASSADO = 1
+DIAS_NOTIFICACAO_FUTURO = 10
+
 try:
     supabase: Client = create_client(URL_SUPABASE, CHAVE_SUPABASE)
 except Exception as e:
@@ -352,8 +359,65 @@ def carregar_demandas_data(data_str):
     return dados
 
 
+@st.cache_data(ttl=45, show_spinner=False)
+def buscar_demandas_geral(termo_busca, data_centro_str, dias_raio=20, limite=80):
+    """Busca demanda em várias datas/colunas, sem alterar nada no Supabase.
+
+    A busca tenta primeiro pelas colunas mais importantes. Depois faz uma busca
+    limitada em datas próximas para pegar medida/referência dentro dos itens.
+    """
+    termo_limpo = str(termo_busca or "").strip()
+    termo_norm = _normalizar(termo_limpo)
+    if not termo_norm:
+        return []
+
+    encontrados = {}
+
+    def adicionar(lista):
+        for demanda in lista or []:
+            demanda_id = str(demanda.get("id") or demanda.get("nf") or len(encontrados))
+            encontrados[demanda_id] = demanda
+
+    # Busca rápida por colunas simples do Supabase.
+    for coluna in ["nf", "cliente", "referencia", "agendamento"]:
+        try:
+            resposta = (
+                supabase.table("demandas")
+                .select("*")
+                .ilike(coluna, f"%{termo_limpo}%")
+                .limit(limite)
+                .execute()
+            )
+            adicionar(resposta.data)
+        except Exception:
+            pass
+
+    # Fallback: datas próximas para localizar medida/quantidade dentro de itens JSON.
+    try:
+        data_centro = datetime.datetime.strptime(data_centro_str, "%Y-%m-%d").date()
+    except Exception:
+        data_centro = datetime.date.today()
+
+    for deslocamento in range(-dias_raio, dias_raio + 1):
+        if len(encontrados) >= limite:
+            break
+        data_busca = (data_centro + datetime.timedelta(days=deslocamento)).strftime("%Y-%m-%d")
+        try:
+            adicionar([
+                demanda for demanda in carregar_demandas_data(data_busca)
+                if termo_norm in _texto_busca_demanda(demanda)
+            ])
+        except Exception:
+            pass
+
+    dados = list(encontrados.values())
+    dados.sort(key=lambda x: (str(x.get("data", "")), x.get("ordem") if x.get("ordem") is not None else 999), reverse=True)
+    return dados[:limite]
+
+
 def limpar_cache():
     carregar_demandas_data.clear()
+    buscar_demandas_geral.clear()
 
 
 def voltar_lista():
@@ -441,60 +505,124 @@ def _data_demanda(demanda):
         return None
 
 
-def gerar_alertas_demandas(demandas, data_referencia):
-    """Avisa somente eventos importantes vistos nesta sessão.
+def _agora_iso():
+    return datetime.datetime.now().isoformat(timespec="seconds")
 
-    Não altera dados no Supabase. No primeiro carregamento da data, cria uma
-    memória local da tela para não transformar todas as demandas existentes em
-    alerta. Depois disso, avisa apenas:
+
+def _ler_notificacoes_local():
+    modelo = {"vistos": {}, "notificacoes": []}
+    if not ARQUIVO_NOTIFICACOES.exists():
+        return modelo
+    try:
+        dados = json.loads(ARQUIVO_NOTIFICACOES.read_text(encoding="utf-8"))
+        if not isinstance(dados, dict):
+            return modelo
+        dados.setdefault("vistos", {})
+        dados.setdefault("notificacoes", [])
+        return dados
+    except Exception:
+        return modelo
+
+
+def _salvar_notificacoes_local(dados):
+    try:
+        ARQUIVO_NOTIFICACOES.write_text(
+            json.dumps(dados, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+
+
+def _notificacao_ativa(item):
+    try:
+        criado = datetime.datetime.fromisoformat(item.get("criado_em", ""))
+    except Exception:
+        return False
+    return datetime.datetime.now() - criado <= datetime.timedelta(hours=HORAS_NOTIFICACAO)
+
+
+def carregar_demandas_janela_notificacao(data_base):
+    demandas = []
+    for deslocamento in range(-DIAS_NOTIFICACAO_PASSADO, DIAS_NOTIFICACAO_FUTURO + 1):
+        data_busca = (data_base + datetime.timedelta(days=deslocamento)).strftime("%Y-%m-%d")
+        try:
+            demandas.extend(carregar_demandas_data(data_busca))
+        except Exception:
+            pass
+    return demandas
+
+
+def gerar_alertas_demandas(_demandas_do_dia, data_referencia):
+    """Avisa somente eventos importantes de todos os dias próximos.
+
+    Não altera dados no Supabase. O histórico é local e cada notificação fica
+    visível por 24 horas:
     - demanda nova;
-    - demanda que acabou de ficar finalizada.
+    - demanda que ficou finalizada.
     """
-    chave_memoria = f"snapshot_demandas_{data_referencia.strftime('%Y_%m_%d')}"
-    snapshot_anterior = st.session_state.get(chave_memoria)
-    snapshot_atual = {}
-    alertas = []
+    dados = _ler_notificacoes_local()
+    vistos = dados.get("vistos", {})
+    notificacoes = [
+        item for item in dados.get("notificacoes", [])
+        if _notificacao_ativa(item)
+    ]
 
-    for demanda in demandas:
-        classe, _, marcadas = status_demanda(demanda)
+    demandas_janela = carregar_demandas_janela_notificacao(data_referencia)
+    primeira_execucao = not bool(vistos)
+
+    for demanda in demandas_janela:
         demanda_id = str(demanda.get("id") or demanda.get("nf") or "")
         if not demanda_id:
             continue
 
-        snapshot_atual[demanda_id] = {
-            "status": classe,
-            "nf": str(demanda.get("nf", "") or "SEM NF"),
-            "cliente": str(demanda.get("cliente", "") or "SEM CLIENTE"),
-        }
-
+        classe, _, marcadas = status_demanda(demanda)
         cliente = str(demanda.get("cliente", "") or "SEM CLIENTE")
         nf = str(demanda.get("nf", "") or "SEM NF")
+        data_demanda = str(demanda.get("data", ""))
         medidas = _texto_medidas(demanda)
+        anterior = vistos.get(demanda_id)
 
-        if snapshot_anterior is None:
-            continue
-
-        anterior = snapshot_anterior.get(demanda_id)
-        if anterior is None:
-            alertas.append({
+        if not primeira_execucao and anterior is None:
+            notificacoes.append({
+                "id": f"nova_{demanda_id}_{_agora_iso()}",
                 "nivel": "info",
+                "tipo": "nova",
                 "titulo": f"Nova demanda — NF {nf}",
-                "texto": f"{cliente} • {medidas}.",
+                "texto": f"{cliente} • {medidas} • Data: {data_demanda}.",
+                "criado_em": _agora_iso(),
             })
-            continue
-
-        if anterior.get("status") != "finalizado" and classe == "finalizado":
-            alertas.append({
+        elif anterior and anterior.get("status") != "finalizado" and classe == "finalizado":
+            notificacoes.append({
+                "id": f"finalizada_{demanda_id}_{_agora_iso()}",
                 "nivel": "atencao",
+                "tipo": "finalizada",
                 "titulo": f"Demanda finalizada — NF {nf}",
-                "texto": f"{cliente} • {medidas} • {marcadas}/{len(ETAPAS_PRODUCAO)} etapas concluídas.",
+                "texto": f"{cliente} • {medidas} • Data: {data_demanda} • {marcadas}/{len(ETAPAS_PRODUCAO)} etapas.",
+                "criado_em": _agora_iso(),
             })
 
-    st.session_state[chave_memoria] = snapshot_atual
+        vistos[demanda_id] = {
+            "status": classe,
+            "nf": nf,
+            "cliente": cliente,
+            "data": data_demanda,
+            "atualizado_em": _agora_iso(),
+        }
+
+    dados["vistos"] = vistos
+    dados["notificacoes"] = notificacoes
+    _salvar_notificacoes_local(dados)
 
     prioridade = {"atencao": 0, "info": 1}
-    alertas.sort(key=lambda item: prioridade.get(item["nivel"], 9))
-    return alertas
+    notificacoes.sort(
+        key=lambda item: (
+            prioridade.get(item.get("nivel"), 9),
+            item.get("criado_em", ""),
+        ),
+        reverse=True,
+    )
+    return notificacoes
 
 
 def mostrar_painel_alertas(alertas):
@@ -507,7 +635,10 @@ def mostrar_painel_alertas(alertas):
     ):
         if not alertas:
             st.success("Nenhuma novidade importante desde a última atualização da tela.")
-            st.caption("O painel avisa apenas quando entra demanda nova ou quando uma demanda fica finalizada.")
+            st.caption(
+                "O painel avisa por 24 horas quando entra demanda nova ou quando uma demanda fica finalizada, "
+                "mesmo que a demanda seja de amanhã ou dos próximos dias."
+            )
             return
 
         c1, c2 = st.columns(2)
@@ -624,12 +755,19 @@ if st.session_state.modo_demanda == "lista":
 
     busca_demanda = st.text_input(
         "🔎 Buscar demanda",
-        placeholder="Digite NF, cliente, medida ou referência",
+        placeholder="Digite NF, cliente, medida ou referência. Ex: 89",
         key="busca_demanda",
     )
-    demandas_filtradas = filtrar_demandas(demandas_do_dia, busca_demanda)
     if busca_demanda:
-        st.caption(f"Encontradas {len(demandas_filtradas)} demanda(s) para: {busca_demanda}")
+        demandas_filtradas = buscar_demandas_geral(busca_demanda, data_str)
+    else:
+        demandas_filtradas = demandas_do_dia
+
+    if busca_demanda:
+        st.caption(
+            f"Encontradas {len(demandas_filtradas)} demanda(s) para: {busca_demanda}. "
+            "A busca olha NF, cliente, referência, agendamento e datas próximas."
+        )
     st.session_state.pagina_atual = 1 if busca_demanda else st.session_state.pagina_atual
 
     if st.session_state.mostrar_txt_geral and demandas_do_dia:
@@ -677,7 +815,8 @@ if st.session_state.modo_demanda == "lista":
             col_a, col_b = st.columns([3, 1])
             with col_a:
                 st.markdown(f"<div class='demand-title'>{d.get('cliente', '')}</div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='demand-meta'>NF: <b>{d.get('nf', '')}</b> • {medidas_str}</div>", unsafe_allow_html=True)
+                data_card = d.get("data", data_str)
+                st.markdown(f"<div class='demand-meta'>NF: <b>{d.get('nf', '')}</b> • {medidas_str} • Data: <b>{data_card}</b></div>", unsafe_allow_html=True)
                 st.markdown(f"<span class='status-badge {classe}'>{icone} {marcadas}/{len(ETAPAS_PRODUCAO)}</span>", unsafe_allow_html=True)
             with col_b:
                 if st.button("📄 Etiquetas", key=f"etq_{d['id']}"):
