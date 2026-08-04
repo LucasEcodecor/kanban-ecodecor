@@ -90,6 +90,28 @@ st.markdown("""
         padding: 14px;
     }
 
+    .alert-box {
+        background-color: #111827;
+        border: 1px solid #334155;
+        border-radius: 14px;
+        padding: 12px 14px;
+        margin: 8px 0;
+    }
+    .alert-title {
+        color: #f8fafc;
+        font-size: 15px;
+        font-weight: 900;
+        margin-bottom: 4px;
+    }
+    .alert-meta {
+        color: #cbd5e1;
+        font-size: 12.5px;
+        line-height: 1.35;
+    }
+    .alert-critico { border-color: #dc2626; }
+    .alert-atencao { border-color: #eab308; }
+    .alert-info { border-color: #2563eb; }
+
     /* ===============================================================
        📱 AJUSTES RESPONSIVOS PARA CELULAR
        Mantém o desktop largo, mas empilha colunas no telefone.
@@ -198,10 +220,10 @@ ETAPAS_PRODUCAO = [
     "ETIQUETAS (LUCAS)",
     "ARTE (TALLES/LUCAS)",
     "IMPRESSÃO (TALLES)",
-    "CORTE EM ANDAMENTO (CASSIO)",
-    "CORTE FINALIZADO (CASSIO)",
-    "PRODUÇÃO EM ANDAMENTO (GUSTAVO)",
-    "PRODUÇÃO FINALIZADO (GUSTAVO)",
+    "CORTE EM ANDAMENTO (DAVID)",
+    "CORTE FINALIZADO (DAVID)",
+    "PRODUÇÃO EM ANDAMENTO (SASKA)",
+    "PRODUÇÃO FINALIZADO (SASKA)",
     "NOTA FISCAL (MICHELLI)",
     "LIBERADO PARA ENTREGA (MICHELLI)",
 ]
@@ -240,16 +262,9 @@ def obter_capacidade(cliente, tam):
         return 10 if is_bigodinho else 11
     if tam == "60x40":
         return 24
-    if tam == "50x20":
-        return 9
     if tam == "30x40":
-        return 47
-    return None
-
-
-def usa_caixas(tam):
-    """Adesivos 55x35 são controlados por chapas, não por caixas."""
-    return tam != "55x35"
+        return 50
+    return 1
 
 
 def linha_cliente_etiqueta(cliente):
@@ -272,14 +287,11 @@ def gerar_txt_etiquetas(demandas, data_label=None):
         linha_cli = linha_cliente_etiqueta(dem.get("cliente", ""))
         for it in dem.get("itens", []) or []:
             tam = it.get("tam", "")
-            qtd = int(it.get("qtd", 0))
             cap = obter_capacidade(dem.get("cliente", ""), tam)
             linhas.append(f"NF: {dem.get('nf', '')}")
             linhas.append(linha_cli)
             linhas.append(f"MEDIDA: {tam}")
-            linhas.append(
-                f"QUANTIDADE: {cap if usa_caixas(tam) else qtd} unidades"
-            )
+            linhas.append(f"QUANTIDADE: {cap} unidades")
             linhas.append("-" * 30)
     return "\n".join(linhas)
 
@@ -301,10 +313,7 @@ def total_caixas(demandas):
         for it in d.get("itens", []) or []:
             try:
                 qtd = int(it.get("qtd", 0))
-                tam = it.get("tam", "")
-                if not usa_caixas(tam):
-                    continue
-                cap = obter_capacidade(d.get("cliente", ""), tam)
+                cap = obter_capacidade(d.get("cliente", ""), it.get("tam", ""))
                 caixas += math.ceil(qtd / cap) if cap else 0
             except Exception:
                 pass
@@ -382,6 +391,117 @@ def validar_nf_duplicada(nf, is_edit=False, id_atual=None):
         return False
     return False
 
+
+def _texto_medidas(demanda):
+    partes = []
+    for item in demanda.get("itens", []) or []:
+        tam = item.get("tam", "")
+        qtd = item.get("qtd", "")
+        if tam or qtd:
+            partes.append(f"{tam} ({qtd})")
+    return ", ".join(partes) if partes else "sem medidas"
+
+
+def _data_demanda(demanda):
+    try:
+        return datetime.datetime.strptime(str(demanda.get("data", "")), "%Y-%m-%d").date()
+    except Exception:
+        return None
+
+
+def gerar_alertas_demandas(demandas, data_referencia):
+    """Gera alertas visuais locais. Não altera dados no Supabase."""
+    hoje = datetime.date.today()
+    alertas = []
+
+    for demanda in demandas:
+        classe, _, marcadas = status_demanda(demanda)
+        concluida = classe == "finalizado"
+        data_demanda = _data_demanda(demanda) or data_referencia
+        cliente = str(demanda.get("cliente", "") or "SEM CLIENTE")
+        nf = str(demanda.get("nf", "") or "SEM NF")
+        medidas = _texto_medidas(demanda)
+
+        if not demanda.get("cliente") or not demanda.get("nf") or not demanda.get("itens"):
+            alertas.append({
+                "nivel": "critico",
+                "titulo": f"Cadastro incompleto — NF {nf}",
+                "texto": f"{cliente} • {medidas}. Confira cliente, NF e medidas antes de produzir.",
+            })
+
+        if data_demanda < hoje and not concluida:
+            alertas.append({
+                "nivel": "critico",
+                "titulo": f"Atrasada — NF {nf}",
+                "texto": f"{cliente} • {medidas} • {marcadas}/{len(ETAPAS_PRODUCAO)} etapas concluídas.",
+            })
+        elif data_demanda == hoje and not concluida:
+            alertas.append({
+                "nivel": "atencao",
+                "titulo": f"Para hoje — NF {nf}",
+                "texto": f"{cliente} • {medidas} • falta finalizar etapas de produção.",
+            })
+
+        if demanda.get("agendamento"):
+            alertas.append({
+                "nivel": "info",
+                "titulo": f"Agendamento — NF {nf}",
+                "texto": f"{cliente} • {demanda.get('agendamento')} • {medidas}.",
+            })
+
+        if 0 < marcadas < len(ETAPAS_PRODUCAO):
+            faltantes = [
+                etapa for etapa in ETAPAS_PRODUCAO
+                if not (demanda.get("etapas", {}) or {}).get(etapa, False)
+            ][:3]
+            alertas.append({
+                "nivel": "info",
+                "titulo": f"Em andamento — NF {nf}",
+                "texto": f"{cliente} • próximas etapas: {', '.join(faltantes)}.",
+            })
+
+    prioridade = {"critico": 0, "atencao": 1, "info": 2}
+    alertas.sort(key=lambda item: prioridade.get(item["nivel"], 9))
+    return alertas
+
+
+def mostrar_painel_alertas(alertas):
+    criticos = sum(1 for item in alertas if item["nivel"] == "critico")
+    atencao = sum(1 for item in alertas if item["nivel"] == "atencao")
+    infos = sum(1 for item in alertas if item["nivel"] == "info")
+
+    with st.expander(
+        f"🔔 Alertas do dia — {len(alertas)} aviso(s)",
+        expanded=bool(criticos or atencao),
+    ):
+        if not alertas:
+            st.success("Nenhum alerta importante para esta data.")
+            return
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Críticos", criticos)
+        c2.metric("Atenção", atencao)
+        c3.metric("Informativos", infos)
+
+        for alerta in alertas[:12]:
+            classe = {
+                "critico": "alert-critico",
+                "atencao": "alert-atencao",
+                "info": "alert-info",
+            }.get(alerta["nivel"], "alert-info")
+            st.markdown(
+                f"""
+                <div class="alert-box {classe}">
+                    <div class="alert-title">{alerta["titulo"]}</div>
+                    <div class="alert-meta">{alerta["texto"]}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        if len(alertas) > 12:
+            st.caption(f"Mostrando 12 de {len(alertas)} alertas. Abra os cards para ver o restante.")
+
 # ==============================================================================
 # 📋 CABEÇALHO
 # ==============================================================================
@@ -455,6 +575,9 @@ if st.session_state.modo_demanda == "lista":
     m4.markdown(f"<div class='metric-card'><div class='metric-label'>Em andamento</div><div class='metric-value'>{andamento}</div></div>", unsafe_allow_html=True)
     m5.markdown(f"<div class='metric-card'><div class='metric-label'>Finalizadas</div><div class='metric-value'>{finalizadas}</div></div>", unsafe_allow_html=True)
 
+    alertas_do_dia = gerar_alertas_demandas(demandas_do_dia, st.session_state.data_foco)
+    mostrar_painel_alertas(alertas_do_dia)
+
     st.write("")
     topo1, topo2, topo3 = st.columns([1.2, 1.2, 1.2])
     if topo1.button("➕ Nova demanda", use_container_width=True):
@@ -522,14 +645,11 @@ if st.session_state.modo_demanda == "lista":
             with st.expander("Abrir detalhes e etapas", expanded=False):
                 cinfo1, cinfo2 = st.columns([1, 1])
                 with cinfo1:
-                    st.markdown("**📦 Medidas e quantidades**")
+                    st.markdown("**📦 Medidas e caixas**")
                     for it in itens:
                         try:
                             tam = it.get("tam", "")
                             qtd = int(it.get("qtd", 0))
-                            if not usa_caixas(tam):
-                                st.markdown(f"- **{tam}** — **{qtd} chapas**")
-                                continue
                             cap = obter_capacidade(d.get("cliente", ""), tam)
                             caixas = math.ceil(qtd / cap)
                             st.markdown(f"- **{tam}** — {qtd} un — **{caixas} caixa(s)** *(cap. {cap}/cx)*")
@@ -632,10 +752,7 @@ elif st.session_state.modo_demanda in ["nova", "editar"]:
 
         with st.form("form_adicionar_item"):
             c_m1, c_m2 = st.columns([1, 1])
-            t_med = c_m1.selectbox(
-                "Medida:",
-                ["30x40", "50x20", "55x35", "60x40", "90x60"],
-            )
+            t_med = c_m1.selectbox("Medida:", ["30x40", "60x40", "90x60"])
             t_qtd = c_m2.number_input("QTD:", min_value=1, value=1, step=1)
             add_item = st.form_submit_button("➕ Adicionar medida")
             if add_item:
