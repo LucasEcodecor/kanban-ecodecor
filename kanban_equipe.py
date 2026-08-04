@@ -1,6 +1,8 @@
 import streamlit as st
 import datetime
 import math
+import re
+import unicodedata
 from supabase import create_client, Client
 
 # ==============================================================================
@@ -330,6 +332,12 @@ def status_demanda(d):
     return "pendente", "🔴", marcadas
 
 
+def _normalizar(valor):
+    texto = unicodedata.normalize("NFKD", str(valor).strip().lower())
+    texto = "".join(c for c in texto if not unicodedata.combining(c))
+    return re.sub(r"[^a-z0-9]+", "", texto)
+
+
 @st.cache_data(ttl=20, show_spinner=False)
 def carregar_demandas_data(data_str):
     resposta = (
@@ -400,6 +408,30 @@ def _texto_medidas(demanda):
         if tam or qtd:
             partes.append(f"{tam} ({qtd})")
     return ", ".join(partes) if partes else "sem medidas"
+
+
+def _texto_busca_demanda(demanda):
+    """Texto simples para buscar por NF, cliente, medida ou referência."""
+    partes = [
+        demanda.get("cliente", ""),
+        demanda.get("nf", ""),
+        demanda.get("referencia", ""),
+        demanda.get("agendamento", ""),
+    ]
+    for item in demanda.get("itens", []) or []:
+        partes.append(item.get("tam", ""))
+        partes.append(str(item.get("qtd", "")))
+    return _normalizar(" ".join(str(parte) for parte in partes))
+
+
+def filtrar_demandas(demandas, termo_busca):
+    termo = _normalizar(termo_busca)
+    if not termo:
+        return demandas
+    return [
+        demanda for demanda in demandas
+        if termo in _texto_busca_demanda(demanda)
+    ]
 
 
 def _data_demanda(demanda):
@@ -590,6 +622,16 @@ if st.session_state.modo_demanda == "lista":
 
     itens_por_pagina = topo3.selectbox("Cards por página", [5, 10, 15, 20, 30], index=1, label_visibility="collapsed")
 
+    busca_demanda = st.text_input(
+        "🔎 Buscar demanda",
+        placeholder="Digite NF, cliente, medida ou referência",
+        key="busca_demanda",
+    )
+    demandas_filtradas = filtrar_demandas(demandas_do_dia, busca_demanda)
+    if busca_demanda:
+        st.caption(f"Encontradas {len(demandas_filtradas)} demanda(s) para: {busca_demanda}")
+    st.session_state.pagina_atual = 1 if busca_demanda else st.session_state.pagina_atual
+
     if st.session_state.mostrar_txt_geral and demandas_do_dia:
         conteudo_massa = gerar_txt_etiquetas(demandas_do_dia, data_label=data_label)
         with st.expander("Preview do TXT geral de etiquetas", expanded=True):
@@ -606,8 +648,10 @@ if st.session_state.modo_demanda == "lista":
 
     if not demandas_do_dia:
         st.info(f"Nenhuma demanda para {data_label}.")
+    elif not demandas_filtradas:
+        st.warning("Nenhuma demanda encontrada com essa busca.")
     else:
-        total_paginas = max(1, math.ceil(len(demandas_do_dia) / itens_por_pagina))
+        total_paginas = max(1, math.ceil(len(demandas_filtradas) / itens_por_pagina))
         st.session_state.pagina_atual = min(max(1, st.session_state.pagina_atual), total_paginas)
 
         p1, p2, p3 = st.columns([1, 2, 1])
@@ -621,7 +665,7 @@ if st.session_state.modo_demanda == "lista":
 
         ini = (st.session_state.pagina_atual - 1) * itens_por_pagina
         fim = ini + itens_por_pagina
-        demandas_visiveis = demandas_do_dia[ini:fim]
+        demandas_visiveis = demandas_filtradas[ini:fim]
 
         for idx_local, d in enumerate(demandas_visiveis):
             idx_global = ini + idx_local
