@@ -410,78 +410,77 @@ def _data_demanda(demanda):
 
 
 def gerar_alertas_demandas(demandas, data_referencia):
-    """Gera alertas visuais locais. Não altera dados no Supabase."""
-    hoje = datetime.date.today()
+    """Avisa somente eventos importantes vistos nesta sessão.
+
+    Não altera dados no Supabase. No primeiro carregamento da data, cria uma
+    memória local da tela para não transformar todas as demandas existentes em
+    alerta. Depois disso, avisa apenas:
+    - demanda nova;
+    - demanda que acabou de ficar finalizada.
+    """
+    chave_memoria = f"snapshot_demandas_{data_referencia.strftime('%Y_%m_%d')}"
+    snapshot_anterior = st.session_state.get(chave_memoria)
+    snapshot_atual = {}
     alertas = []
 
     for demanda in demandas:
         classe, _, marcadas = status_demanda(demanda)
-        concluida = classe == "finalizado"
-        data_demanda = _data_demanda(demanda) or data_referencia
+        demanda_id = str(demanda.get("id") or demanda.get("nf") or "")
+        if not demanda_id:
+            continue
+
+        snapshot_atual[demanda_id] = {
+            "status": classe,
+            "nf": str(demanda.get("nf", "") or "SEM NF"),
+            "cliente": str(demanda.get("cliente", "") or "SEM CLIENTE"),
+        }
+
         cliente = str(demanda.get("cliente", "") or "SEM CLIENTE")
         nf = str(demanda.get("nf", "") or "SEM NF")
         medidas = _texto_medidas(demanda)
 
-        if not demanda.get("cliente") or not demanda.get("nf") or not demanda.get("itens"):
-            alertas.append({
-                "nivel": "critico",
-                "titulo": f"Cadastro incompleto — NF {nf}",
-                "texto": f"{cliente} • {medidas}. Confira cliente, NF e medidas antes de produzir.",
-            })
+        if snapshot_anterior is None:
+            continue
 
-        if data_demanda < hoje and not concluida:
+        anterior = snapshot_anterior.get(demanda_id)
+        if anterior is None:
             alertas.append({
-                "nivel": "critico",
-                "titulo": f"Atrasada — NF {nf}",
-                "texto": f"{cliente} • {medidas} • {marcadas}/{len(ETAPAS_PRODUCAO)} etapas concluídas.",
+                "nivel": "info",
+                "titulo": f"Nova demanda — NF {nf}",
+                "texto": f"{cliente} • {medidas}.",
             })
-        elif data_demanda == hoje and not concluida:
+            continue
+
+        if anterior.get("status") != "finalizado" and classe == "finalizado":
             alertas.append({
                 "nivel": "atencao",
-                "titulo": f"Para hoje — NF {nf}",
-                "texto": f"{cliente} • {medidas} • falta finalizar etapas de produção.",
+                "titulo": f"Demanda finalizada — NF {nf}",
+                "texto": f"{cliente} • {medidas} • {marcadas}/{len(ETAPAS_PRODUCAO)} etapas concluídas.",
             })
 
-        if demanda.get("agendamento"):
-            alertas.append({
-                "nivel": "info",
-                "titulo": f"Agendamento — NF {nf}",
-                "texto": f"{cliente} • {demanda.get('agendamento')} • {medidas}.",
-            })
+    st.session_state[chave_memoria] = snapshot_atual
 
-        if 0 < marcadas < len(ETAPAS_PRODUCAO):
-            faltantes = [
-                etapa for etapa in ETAPAS_PRODUCAO
-                if not (demanda.get("etapas", {}) or {}).get(etapa, False)
-            ][:3]
-            alertas.append({
-                "nivel": "info",
-                "titulo": f"Em andamento — NF {nf}",
-                "texto": f"{cliente} • próximas etapas: {', '.join(faltantes)}.",
-            })
-
-    prioridade = {"critico": 0, "atencao": 1, "info": 2}
+    prioridade = {"atencao": 0, "info": 1}
     alertas.sort(key=lambda item: prioridade.get(item["nivel"], 9))
     return alertas
 
 
 def mostrar_painel_alertas(alertas):
-    criticos = sum(1 for item in alertas if item["nivel"] == "critico")
-    atencao = sum(1 for item in alertas if item["nivel"] == "atencao")
-    infos = sum(1 for item in alertas if item["nivel"] == "info")
+    finalizadas = sum(1 for item in alertas if "finalizada" in item["titulo"].lower())
+    novas = sum(1 for item in alertas if "nova demanda" in item["titulo"].lower())
 
     with st.expander(
-        f"🔔 Alertas do dia — {len(alertas)} aviso(s)",
-        expanded=bool(criticos or atencao),
+        f"🔔 Notificações importantes — {len(alertas)} aviso(s)",
+        expanded=bool(alertas),
     ):
         if not alertas:
-            st.success("Nenhum alerta importante para esta data.")
+            st.success("Nenhuma novidade importante desde a última atualização da tela.")
+            st.caption("O painel avisa apenas quando entra demanda nova ou quando uma demanda fica finalizada.")
             return
 
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Críticos", criticos)
-        c2.metric("Atenção", atencao)
-        c3.metric("Informativos", infos)
+        c1, c2 = st.columns(2)
+        c1.metric("Demandas novas", novas)
+        c2.metric("Finalizadas", finalizadas)
 
         for alerta in alertas[:12]:
             classe = {
