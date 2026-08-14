@@ -304,8 +304,10 @@ if "mostrar_txt_geral" not in st.session_state:
 def obter_capacidade(cliente, tam):
     cli_upper = str(cliente).upper()
     is_bigodinho = any(palavra in cli_upper for palavra in ["BIGODINHO", "LUCAS", "JIMMY", "REP"])
-    if tam == "90x60":
+    if tam in ("80x50", "90x60"):
         return 10 if is_bigodinho else 11
+    if tam == "85x55":
+        return 11
     if tam == "60x40":
         return 24
     if tam == "30x40":
@@ -1026,7 +1028,7 @@ elif st.session_state.modo_demanda in ["nova", "editar"]:
 
         with st.form("form_adicionar_item"):
             c_m1, c_m2 = st.columns([1, 1])
-            t_med = c_m1.selectbox("Medida:", ["30x40", "50x20", "55x35", "60x40", "90x60"])
+            t_med = c_m1.selectbox("Medida:", ["30x40", "50x20", "55x35", "60x40", "80x50", "85x55"])
             t_qtd = c_m2.number_input("QTD:", min_value=1, value=1, step=1)
             add_item = st.form_submit_button("➕ Adicionar medida")
             if add_item:
