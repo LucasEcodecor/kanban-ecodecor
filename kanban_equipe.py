@@ -309,7 +309,7 @@ def obter_capacidade(cliente, tam):
     if tam == "85x55":
         return 11
     if tam == "60x40":
-        return 24
+        return 22
     if tam == "30x40":
         return 47
     if tam in ("20x50", "50x20"):
