@@ -301,6 +301,13 @@ if "mostrar_txt_geral" not in st.session_state:
 # ==============================================================================
 # 🧰 FUNÇÕES
 # ==============================================================================
+CLIENTE_BIGODINHO = "GALPAO DROP LTDA (BIGODINHO)"
+
+
+def is_cliente_bigodinho(cliente):
+    return "BIGODINHO" in str(cliente or "").upper()
+
+
 def obter_capacidade(cliente, tam):
     cli_upper = str(cliente).upper()
     is_bigodinho = any(palavra in cli_upper for palavra in ["BIGODINHO", "LUCAS", "JIMMY", "REP"])
@@ -321,7 +328,9 @@ def obter_capacidade(cliente, tam):
 
 def linha_cliente_etiqueta(cliente):
     cli_upper = str(cliente).upper()
-    if "LUCAS" in cli_upper or "BIGODINHO" in cli_upper:
+    if is_cliente_bigodinho(cliente):
+        return f"CLIENTE: {CLIENTE_BIGODINHO}"
+    if "LUCAS" in cli_upper:
         return "CNPJ: 49.657.733/0001-92"
     if "JIMMY" in cli_upper:
         return "CNPJ: 30.514.229/0001-05"
@@ -1009,7 +1018,18 @@ elif st.session_state.modo_demanda in ["nova", "editar"]:
 
     with st.container(border=True):
         st.markdown("**📝 Dados principais**")
-        cli_d = st.text_input("Nome do cliente:", value=d_edit.get("cliente", "")).strip().upper()
+        cliente_atual = str(d_edit.get("cliente", "") or "").strip().upper()
+        tipo_cliente = st.radio(
+            "Tipo de cliente:",
+            ["Cliente normal", "Etiqueta personalizada Bigodinho"],
+            index=1 if is_cliente_bigodinho(cliente_atual) else 0,
+            horizontal=True,
+        )
+        if tipo_cliente == "Etiqueta personalizada Bigodinho":
+            cli_d = CLIENTE_BIGODINHO
+            st.text_input("Nome do cliente:", value=cli_d, disabled=True)
+        else:
+            cli_d = st.text_input("Nome do cliente:", value=cliente_atual).strip().upper()
         nf_d = st.text_input("Número da NF:", value=d_edit.get("nf", "")).strip().upper()
         txt_agend = st.text_input("Agendamento:", value=d_edit.get("agendamento", "")).strip().upper()
         txt_ref = st.text_area("Referência:", value=d_edit.get("referencia", "")).strip().upper()
@@ -1028,7 +1048,12 @@ elif st.session_state.modo_demanda in ["nova", "editar"]:
 
         with st.form("form_adicionar_item"):
             c_m1, c_m2 = st.columns([1, 1])
-            t_med = c_m1.selectbox("Medida:", ["20x50", "30x40", "55x35", "60x40", "80x50", "85x55"])
+            medidas_disponiveis = (
+                ["60x40", "80x50"]
+                if is_cliente_bigodinho(cli_d)
+                else ["20x50", "30x40", "55x35", "60x40", "80x50", "85x55"]
+            )
+            t_med = c_m1.selectbox("Medida:", medidas_disponiveis)
             t_qtd = c_m2.number_input("QTD:", min_value=1, value=1, step=1)
             add_item = st.form_submit_button("➕ Adicionar medida")
             if add_item:
