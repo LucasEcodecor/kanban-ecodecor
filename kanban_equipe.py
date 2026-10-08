@@ -151,29 +151,62 @@ st.markdown("""
     .alert-info { border-color: #16a34a; }
 
 
+    div[data-testid="stTextInput"],
+    div[data-testid="stNumberInput"],
+    div[data-testid="stTextArea"],
+    div[data-testid="stSelectbox"] {
+        background: linear-gradient(145deg, #ffffff 0%, #f3fff6 100%);
+        border: 1px solid #bbf7d0;
+        border-left: 6px solid #16a34a;
+        border-radius: 15px;
+        padding: 10px 12px 12px;
+        margin-bottom: 12px;
+        box-shadow: 0 10px 22px rgba(22,101,52,0.08);
+    }
+
+    div[data-testid="stTextInput"] label,
+    div[data-testid="stNumberInput"] label,
+    div[data-testid="stTextArea"] label,
+    div[data-testid="stSelectbox"] label {
+        color: #166534 !important;
+        font-weight: 850 !important;
+        letter-spacing: 0.01em;
+    }
+
     div[data-baseweb="input"],
     div[data-baseweb="select"] > div,
     div[data-baseweb="textarea"],
     textarea {
-        background-color: #f0fdf4 !important;
-        border-color: #86efac !important;
+        background-color: #ecfdf5 !important;
+        border: 1px solid #86efac !important;
         border-radius: 12px !important;
         color: #111827 !important;
+        box-shadow: inset 4px 0 0 rgba(22,163,74,0.22);
     }
+
     input, textarea, select, label, p, span, div[data-testid="stMarkdownContainer"] {
         color: #111827;
     }
+
+    input::placeholder, textarea::placeholder {
+        color: #64748b !important;
+    }
+
     div[data-baseweb="input"]:focus-within,
     div[data-baseweb="select"] > div:focus-within,
     div[data-baseweb="textarea"]:focus-within,
     textarea:focus {
+        background-color: #ffffff !important;
         border-color: #16a34a !important;
-        box-shadow: 0 0 0 3px rgba(22,163,74,0.14) !important;
+        box-shadow: inset 4px 0 0 #16a34a, 0 0 0 3px rgba(22,163,74,0.16) !important;
     }
+
     div[data-testid="stExpander"], div[data-testid="stForm"] {
         background: linear-gradient(145deg, #ffffff 0%, #f8fffa 100%);
         border: 1px solid #bbf7d0;
-        border-radius: 14px;
+        border-left: 6px solid #16a34a;
+        border-radius: 16px;
+        box-shadow: 0 12px 28px rgba(22,101,52,0.08);
     }
     /* ===============================================================
        📱 AJUSTES RESPONSIVOS PARA CELULAR
@@ -1129,6 +1162,7 @@ elif st.session_state.modo_demanda in ["nova", "editar"]:
                     st.rerun()
                 except Exception as e:
                     st.error(f"Erro ao salvar: {e}")
+
 
 
 
