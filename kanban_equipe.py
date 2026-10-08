@@ -28,44 +28,47 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    .stApp { background-color: #0e1117; color: #fafafa; }
-    h1, h2, h3, h4 { color: #fafafa !important; }
+    .stApp { background: linear-gradient(135deg, #ffffff 0%, #f5f7fb 55%, #eef8f1 100%); color: #111827; }
+    h1, h2, h3, h4 { color: #111827 !important; }
 
     .main-header {
-        background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
-        border: 1px solid #2f3542;
+        background: linear-gradient(135deg, #ffffff 0%, #ecfdf5 100%);
+        border: 1px solid #bbf7d0;
+        border-left: 8px solid #16a34a;
         border-radius: 18px;
         padding: 20px 24px;
         margin-bottom: 16px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+        box-shadow: 0 14px 34px rgba(22,101,52,0.13);
     }
-    .main-title { font-size: 30px; font-weight: 900; margin: 0; letter-spacing: .3px; }
-    .main-subtitle { color: #cbd5e1; margin-top: 6px; font-size: 15px; }
+    .main-title { font-size: 30px; font-weight: 900; margin: 0; letter-spacing: .3px; color: #111827; }
+    .main-subtitle { color: #64748b; margin-top: 6px; font-size: 15px; }
 
     .metric-card {
-        background-color: #151a23;
-        border: 1px solid #2d3748;
+        background: linear-gradient(145deg, #ffffff 0%, #f0fdf4 100%);
+        border: 1px solid #bbf7d0;
+        border-left: 6px solid #16a34a;
         border-radius: 14px;
         padding: 14px 16px;
         min-height: 86px;
     }
-    .metric-label { color: #94a3b8; font-size: 13px; font-weight: 700; }
-    .metric-value { color: #ffffff; font-size: 26px; font-weight: 900; margin-top: 5px; }
+    .metric-label { color: #334155; font-size: 13px; font-weight: 800; }
+    .metric-value { color: #166534; font-size: 26px; font-weight: 900; margin-top: 5px; }
 
     .demand-card {
-        background-color: #151a23;
-        border: 1px solid #2d3748;
+        background: linear-gradient(145deg, #ffffff 0%, #f0fdf4 100%);
+        border: 1px solid #bbf7d0;
+        border-left: 6px solid #16a34a;
         border-radius: 16px;
         padding: 12px 14px;
         margin-bottom: 10px;
     }
-    .demand-title { font-size: 17px; font-weight: 900; color: #f8fafc; }
-    .demand-meta { color: #cbd5e1; font-size: 13px; margin-top: 4px; }
+    .demand-title { font-size: 17px; font-weight: 900; color: #111827; }
+    .demand-meta { color: #475569; font-size: 13px; margin-top: 4px; }
     .date-badge {
         display: inline-block;
-        background-color: #1e3a8a;
-        color: #dbeafe;
-        border: 1px solid #3b82f6;
+        background-color: #dcfce7;
+        color: #166534;
+        border: 1px solid #86efac;
         border-radius: 999px;
         padding: 6px 10px;
         font-size: 13px;
@@ -81,34 +84,35 @@ st.markdown("""
         font-size: 13px;
         margin: 6px 0;
     }
-    .pendente { background-color: #451a1a; color: #fecaca; border: 1px solid #7f1d1d; }
-    .andamento { background-color: #422006; color: #fde68a; border: 1px solid #92400e; }
-    .finalizado { background-color: #052e16; color: #bbf7d0; border: 1px solid #166534; }
+    .pendente { background-color: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+    .andamento { background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+    .finalizado { background-color: #dcfce7; color: #166534; border: 1px solid #86efac; }
 
     div.stButton > button, div.stDownloadButton > button {
         width: 100%;
         min-height: 44px;
-        background-color: #3157d5 !important;
+        background: linear-gradient(135deg, #16a34a, #15803d) !important;
         color: white !important;
         font-weight: 800 !important;
         border-radius: 10px !important;
         border: none !important;
     }
     div.stButton > button:hover, div.stDownloadButton > button:hover {
-        background-color: #2445ad !important;
+        background: linear-gradient(135deg, #15803d, #166534) !important;
         color: white !important;
     }
 
     .soft-box {
-        background-color: #111827;
-        border: 1px solid #334155;
+        background-color: #f0fdf4;
+        border: 1px solid #bbf7d0;
         border-radius: 14px;
         padding: 14px;
     }
 
     .alert-box {
-        background-color: #111827;
-        border: 1px solid #334155;
+        background-color: #ffffff;
+        border: 1px solid #bbf7d0;
+        border-left: 5px solid #16a34a;
         border-radius: 14px;
         padding: 12px 14px;
         margin: 8px 0;
@@ -121,20 +125,20 @@ st.markdown("""
         margin-bottom: 5px;
     }
     .alert-title {
-        color: #f8fafc;
+        color: #111827;
         font-size: 15px;
         font-weight: 900;
         margin-bottom: 0;
     }
     .alert-meta {
-        color: #cbd5e1;
+        color: #475569;
         font-size: 12.5px;
         line-height: 1.35;
     }
     .alert-date {
-        background-color: #1e3a8a;
-        color: #dbeafe;
-        border: 1px solid #3b82f6;
+        background-color: #dcfce7;
+        color: #166534;
+        border: 1px solid #86efac;
         border-radius: 999px;
         padding: 4px 9px;
         font-size: 12px;
@@ -144,8 +148,33 @@ st.markdown("""
     .alert-critico { border-color: #dc2626; }
     .alert-atencao { border-color: #eab308; }
     .alert-sucesso { border-color: #16a34a; }
-    .alert-info { border-color: #2563eb; }
+    .alert-info { border-color: #16a34a; }
 
+
+    div[data-baseweb="input"],
+    div[data-baseweb="select"] > div,
+    div[data-baseweb="textarea"],
+    textarea {
+        background-color: #f0fdf4 !important;
+        border-color: #86efac !important;
+        border-radius: 12px !important;
+        color: #111827 !important;
+    }
+    input, textarea, select, label, p, span, div[data-testid="stMarkdownContainer"] {
+        color: #111827;
+    }
+    div[data-baseweb="input"]:focus-within,
+    div[data-baseweb="select"] > div:focus-within,
+    div[data-baseweb="textarea"]:focus-within,
+    textarea:focus {
+        border-color: #16a34a !important;
+        box-shadow: 0 0 0 3px rgba(22,163,74,0.14) !important;
+    }
+    div[data-testid="stExpander"], div[data-testid="stForm"] {
+        background: linear-gradient(145deg, #ffffff 0%, #f8fffa 100%);
+        border: 1px solid #bbf7d0;
+        border-radius: 14px;
+    }
     /* ===============================================================
        📱 AJUSTES RESPONSIVOS PARA CELULAR
        Mantém o desktop largo, mas empilha colunas no telefone.
@@ -768,7 +797,7 @@ def mostrar_painel_alertas(alertas):
 st.markdown(
     """
     <div class="main-header">
-        <div class="main-title">ECO DECOR<br><span style="font-size:0.92em; color:#e5e7eb;">DEMANDA DIÁRIA</span></div>
+        <div class="main-title">ECO DECOR<br><span style="font-size:0.92em; color:#166534;">DEMANDA DIÁRIA</span></div>
         <div class="main-subtitle">Painel otimizado para produção, etiquetas, celular e acompanhamento de etapas.</div>
     </div>
     """,
@@ -894,7 +923,7 @@ if st.session_state.modo_demanda == "lista":
         if p1.button("⬅ Página", disabled=st.session_state.pagina_atual <= 1):
             st.session_state.pagina_atual -= 1
             st.rerun()
-        p2.markdown(f"<p style='text-align:center;color:#cbd5e1;font-weight:800;'>Página {st.session_state.pagina_atual} de {total_paginas}</p>", unsafe_allow_html=True)
+        p2.markdown(f"<p style='text-align:center;color:#166534;font-weight:800;'>Página {st.session_state.pagina_atual} de {total_paginas}</p>", unsafe_allow_html=True)
         if p3.button("Página ➡", disabled=st.session_state.pagina_atual >= total_paginas):
             st.session_state.pagina_atual += 1
             st.rerun()
@@ -1100,3 +1129,6 @@ elif st.session_state.modo_demanda in ["nova", "editar"]:
                     st.rerun()
                 except Exception as e:
                     st.error(f"Erro ao salvar: {e}")
+
+
+
