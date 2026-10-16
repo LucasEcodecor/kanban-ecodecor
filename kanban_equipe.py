@@ -5,10 +5,11 @@ import math
 import re
 import unicodedata
 from pathlib import Path
+from html import escape
 from supabase import create_client, Client
 
 # ==============================================================================
-# 🚀 ECO DECOR - DEMANDA DIÁRIA | V6 TURBO MOBILE
+# ECO DECOR - DEMANDA DIÁRIA | 2026.10.16-interface-verde
 # Melhorias focadas em velocidade + uso no celular:
 # - Busca apenas a data selecionada no Supabase
 # - Cache curto da data atual
@@ -28,280 +29,77 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    .stApp { background: linear-gradient(135deg, #ffffff 0%, #f5f7fb 55%, #eef8f1 100%); color: #111827; }
-    h1, h2, h3, h4 { color: #111827 !important; }
-
-    .main-header {
-        background: linear-gradient(135deg, #ffffff 0%, #ecfdf5 100%);
-        border: 1px solid #bbf7d0;
-        border-left: 8px solid #16a34a;
-        border-radius: 18px;
-        padding: 20px 24px;
-        margin-bottom: 16px;
-        box-shadow: 0 14px 34px rgba(22,101,52,0.13);
-    }
-    .main-title { font-size: 30px; font-weight: 900; margin: 0; letter-spacing: .3px; color: #111827; }
-    .main-subtitle { color: #64748b; margin-top: 6px; font-size: 15px; }
-
-    .metric-card {
-        background: linear-gradient(145deg, #ffffff 0%, #f0fdf4 100%);
-        border: 1px solid #bbf7d0;
-        border-left: 6px solid #16a34a;
-        border-radius: 14px;
-        padding: 14px 16px;
-        min-height: 86px;
-    }
-    .metric-label { color: #334155; font-size: 13px; font-weight: 800; }
-    .metric-value { color: #166534; font-size: 26px; font-weight: 900; margin-top: 5px; }
-
-    .demand-card {
-        background: linear-gradient(145deg, #ffffff 0%, #f0fdf4 100%);
-        border: 1px solid #bbf7d0;
-        border-left: 6px solid #16a34a;
-        border-radius: 16px;
-        padding: 12px 14px;
-        margin-bottom: 10px;
-    }
-    .demand-title { font-size: 17px; font-weight: 900; color: #111827; }
-    .demand-meta { color: #475569; font-size: 13px; margin-top: 4px; }
-    .date-badge {
-        display: inline-block;
-        background-color: #dcfce7;
-        color: #166534;
-        border: 1px solid #86efac;
-        border-radius: 999px;
-        padding: 6px 10px;
-        font-size: 13px;
-        font-weight: 900;
-        text-align: center;
-        margin-bottom: 8px;
-    }
-    .status-badge {
-        display:inline-block;
-        padding: 5px 10px;
-        border-radius: 999px;
-        font-weight: 900;
-        font-size: 13px;
-        margin: 6px 0;
-    }
-    .pendente { background-color: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
-    .andamento { background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
-    .finalizado { background-color: #dcfce7; color: #166534; border: 1px solid #86efac; }
-
-    div.stButton > button, div.stDownloadButton > button {
-        width: 100%;
-        min-height: 44px;
-        background: linear-gradient(135deg, #16a34a, #15803d) !important;
-        color: white !important;
-        font-weight: 800 !important;
-        border-radius: 10px !important;
-        border: none !important;
-    }
-    div.stButton > button:hover, div.stDownloadButton > button:hover {
-        background: linear-gradient(135deg, #15803d, #166534) !important;
-        color: white !important;
-    }
-
-    .soft-box {
-        background-color: #f0fdf4;
-        border: 1px solid #bbf7d0;
-        border-radius: 14px;
-        padding: 14px;
-    }
-
-    .alert-box {
-        background-color: #ffffff;
-        border: 1px solid #bbf7d0;
-        border-left: 5px solid #16a34a;
-        border-radius: 14px;
-        padding: 12px 14px;
-        margin: 8px 0;
-    }
-    .alert-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-        margin-bottom: 5px;
-    }
-    .alert-title {
-        color: #111827;
-        font-size: 15px;
-        font-weight: 900;
-        margin-bottom: 0;
-    }
-    .alert-meta {
-        color: #475569;
-        font-size: 12.5px;
-        line-height: 1.35;
-    }
-    .alert-date {
-        background-color: #dcfce7;
-        color: #166534;
-        border: 1px solid #86efac;
-        border-radius: 999px;
-        padding: 4px 9px;
-        font-size: 12px;
-        font-weight: 900;
-        white-space: nowrap;
-    }
-    .alert-critico { border-color: #dc2626; }
-    .alert-atencao { border-color: #eab308; }
-    .alert-sucesso { border-color: #16a34a; }
-    .alert-info { border-color: #16a34a; }
-
-
-    div[data-testid="stTextInput"],
-    div[data-testid="stNumberInput"],
-    div[data-testid="stTextArea"],
-    div[data-testid="stSelectbox"] {
-        background: linear-gradient(145deg, #ffffff 0%, #f3fff6 100%);
-        border: 1px solid #bbf7d0;
-        border-left: 6px solid #16a34a;
-        border-radius: 15px;
-        padding: 10px 12px 12px;
-        margin-bottom: 12px;
-        box-shadow: 0 10px 22px rgba(22,101,52,0.08);
-    }
-
-    div[data-testid="stTextInput"] label,
-    div[data-testid="stNumberInput"] label,
-    div[data-testid="stTextArea"] label,
-    div[data-testid="stSelectbox"] label {
-        color: #166534 !important;
-        font-weight: 850 !important;
-        letter-spacing: 0.01em;
-    }
-
-    div[data-baseweb="input"],
-    div[data-baseweb="select"] > div,
-    div[data-baseweb="textarea"],
-    textarea {
-        background-color: #ecfdf5 !important;
-        border: 1px solid #86efac !important;
-        border-radius: 12px !important;
-        color: #111827 !important;
-        box-shadow: inset 4px 0 0 rgba(22,163,74,0.22);
-    }
-
-    input, textarea, select, label, p, span, div[data-testid="stMarkdownContainer"] {
-        color: #111827;
-    }
-
-    input::placeholder, textarea::placeholder {
-        color: #64748b !important;
-    }
-
-    div[data-baseweb="input"]:focus-within,
-    div[data-baseweb="select"] > div:focus-within,
-    div[data-baseweb="textarea"]:focus-within,
-    textarea:focus {
-        background-color: #ffffff !important;
-        border-color: #16a34a !important;
-        box-shadow: inset 4px 0 0 #16a34a, 0 0 0 3px rgba(22,163,74,0.16) !important;
-    }
-
-    div[data-testid="stExpander"], div[data-testid="stForm"] {
-        background: linear-gradient(145deg, #ffffff 0%, #f8fffa 100%);
-        border: 1px solid #bbf7d0;
-        border-left: 6px solid #16a34a;
-        border-radius: 16px;
-        box-shadow: 0 12px 28px rgba(22,101,52,0.08);
-    }
-    /* ===============================================================
-       📱 AJUSTES RESPONSIVOS PARA CELULAR
-       Mantém o desktop largo, mas empilha colunas no telefone.
-       =============================================================== */
+    :root { color-scheme: light; }
+    .stApp { background: #f4f7f5; color: #17251e; }
+    [data-testid="stHeader"] { background: rgba(244,247,245,.96); }
+    .block-container { max-width: 1440px; padding: 4rem 2rem 3rem; }
+    h1, h2, h3, h4, [data-testid="stWidgetLabel"] p { color: #17251e !important; }
+    [data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p {
+        color: #4b6054 !important; font-size: 14px; }
+    .main-header { background: white; border: 1px solid #d6e5db; border-left: 5px solid #16824a;
+        border-radius: 16px; padding: 24px 28px; margin-bottom: 12px; }
+    .eyebrow { color: #197142; font-size: 12px; font-weight: 800; letter-spacing: .1em; }
+    .main-title { font-size: clamp(25px, 3vw, 34px); font-weight: 800; margin: 5px 0; color: #14291d; }
+    .main-subtitle { color: #4b6054; font-size: 15px; line-height: 1.5; }
+    .metric-grid { display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); gap: 12px; margin: 8px 0 20px; }
+    .metric-card { background: white; border: 1px solid #d6e5db; border-top: 3px solid #24915a;
+        border-radius: 12px; padding: 14px 16px; }
+    .metric-label { color: #465d4f; font-size: 13px; font-weight: 600; }
+    .metric-value { color: #145c35; font-size: 28px; font-weight: 800; margin-top: 3px; }
+    [class*="st-key-card_demanda_"] { background: white; border-color: #cfdfd4 !important;
+        border-left: 4px solid #24915a !important; border-radius: 14px; padding: 16px !important; }
+    .demand-title { font-size: 19px; line-height: 1.4; font-weight: 750; color: #17251e; overflow-wrap: anywhere; }
+    .demand-meta { color: #42584a; font-size: 14px; margin: 5px 0; overflow-wrap: anywhere; }
+    .date-badge { display: inline-block; background: #edf7f0; color: #185d37; padding: 6px 10px;
+        font-size: 13px; border-radius: 7px; margin-bottom: 8px; }
+    .status-badge { display:inline-block; padding: 5px 10px; border-radius: 7px; font-weight: 700;
+        font-size: 13px; margin: 6px 0; border: 1px solid transparent; }
+    .pendente { background: #fff2e9; color: #8b3a13; border-color: #f4d5bd; }
+    .andamento { background: #fff7d7; color: #71530a; border-color: #ecdda2; }
+    .finalizado { background: #e8f6ed; color: #166236; border-color: #b8dfc7; }
+    .stButton > button, .stDownloadButton > button, .stFormSubmitButton > button {
+        min-height: 42px; border-radius: 9px; font-weight: 650; }
+    button[kind="secondary"], button[kind="secondaryFormSubmit"] {
+        background: white !important; border: 1px solid #a9cbb6 !important; color: #195e38 !important; }
+    button[kind="primary"], button[kind="primaryFormSubmit"], .stDownloadButton button {
+        background: #167344 !important; border: 1px solid #167344 !important; color: white !important; }
+    button[kind="primary"] p, button[kind="primaryFormSubmit"] p, .stDownloadButton button p { color: white !important; }
+    .stButton button:hover { border-color: #167344 !important; box-shadow: 0 0 0 2px #d8eddf; }
+    button:disabled { opacity: .42; box-shadow: none !important; }
+    [data-testid="stTextInput"] label, [data-testid="stTextArea"] label,
+    [data-testid="stNumberInput"] label, [data-testid="stSelectbox"] label,
+    [data-testid="stDateInput"] label { font-weight: 650; }
+    [data-baseweb="input"], [data-baseweb="select"] > div, textarea {
+        background: #f4fbf6 !important; border: 1px solid #96bda4 !important;
+        border-radius: 9px !important; color: #17251e !important; }
+    input, textarea { color: #17251e !important; }
+    input::placeholder, textarea::placeholder { color: #617669 !important; opacity: 1; }
+    [data-baseweb="input"]:focus-within, [data-baseweb="select"] > div:focus-within, textarea:focus {
+        border-color: #167344 !important; box-shadow: 0 0 0 2px #d8eddf !important; }
+    [data-testid="stExpander"], [data-testid="stForm"] {
+        background: white; border: 1px solid #cfdfd4; border-radius: 10px; box-shadow: none; }
+    [data-testid="stExpander"] summary { color: #234b32; font-weight: 650; }
+    [data-testid="stForm"] { padding: 16px; }
+    .alert-box { border: 1px solid #d6e5db; border-left: 4px solid #24915a;
+        border-radius: 10px; padding: 12px 14px; margin: 8px 0; background: #fbfdfb; }
+    .alert-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .alert-title { font-size: 15px; font-weight: 700; color: #17251e; }
+    .alert-date { font-size: 13px; color: #31543d; white-space: nowrap; }
+    .alert-meta { font-size: 14px; color: #42584a; margin-top: 6px; }
+    .alert-critico { border-left-color: #bb6535; }
+    .alert-sucesso { border-left-color: #16824a; }
     @media (max-width: 768px) {
-        .block-container {
-            padding-left: 0.75rem !important;
-            padding-right: 0.75rem !important;
-            padding-top: 2.25rem !important;
-            max-width: 100% !important;
-        }
-
-        .main-header {
-            padding: 16px 14px 18px 14px;
-            border-radius: 14px;
-            margin-top: 12px;
-            margin-bottom: 14px;
-            overflow: visible !important;
-        }
-        .main-title {
-            display: block;
-            font-size: 19px;
-            line-height: 1.35;
-            white-space: normal;
-            word-break: normal;
-            overflow: visible !important;
-        }
-        .main-subtitle {
-            display: block;
-            font-size: 12.5px;
-            line-height: 1.45;
-            margin-top: 8px;
-            overflow: visible !important;
-        }
-
-        /* Força os blocos horizontais do Streamlit a virarem coluna no celular */
-        div[data-testid="stHorizontalBlock"] {
-            flex-wrap: wrap !important;
-            gap: 0.45rem !important;
-        }
-        div[data-testid="column"] {
-            min-width: 100% !important;
-            width: 100% !important;
-            flex: 1 1 100% !important;
-        }
-
-        .metric-card {
-            min-height: 64px;
-            padding: 10px 12px;
-            margin-bottom: 6px;
-            border-radius: 12px;
-        }
-        .metric-label { font-size: 12px; }
-        .metric-value { font-size: 22px; }
-
-        .demand-card {
-            padding: 12px;
-            border-radius: 14px;
-            margin-bottom: 12px;
-        }
-        .demand-title {
-            font-size: 16px;
-            line-height: 1.25;
-        }
-        .demand-meta {
-            font-size: 12.5px;
-            line-height: 1.35;
-        }
-        .status-badge {
-            font-size: 12px;
-            padding: 5px 9px;
-        }
-
-        div.stButton > button, div.stDownloadButton > button {
-            min-height: 50px;
-            font-size: 14px !important;
-            border-radius: 12px !important;
-            margin-top: 4px;
-        }
-
-        div[data-testid="stExpander"] {
-            border-radius: 12px !important;
-        }
-
-        textarea, input, select {
-            font-size: 16px !important; /* evita zoom automático no iPhone */
-        }
-    }
-
-    @media (min-width: 769px) {
-        .block-container {
-            padding-top: 1.25rem !important;
-            max-width: 1400px !important;
-        }
+        .block-container { padding: 3.5rem .8rem 2rem; }
+        .main-header { padding: 18px; }
+        .metric-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+        .metric-card { padding: 12px; }
+        .metric-value { font-size: 25px; }
+        .demand-title { font-size: 17px; }
+        .alert-head { align-items: flex-start; flex-wrap: wrap; }
+        input, textarea { font-size: 16px !important; }
+        [data-testid="stHorizontalBlock"] { flex-wrap: wrap; }
+        [data-testid="stColumn"] { min-width: min(100%, 280px) !important; flex: 1 1 280px !important; }
+        .stButton button { width: 100%; }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -617,6 +415,16 @@ def filtrar_demandas(demandas, termo_busca):
     ]
 
 
+def filtrar_por_producao(demandas, situacao="Todas", etapa="Todas"):
+    """Filtra a lista na tela, sem gravar nem inferir uma etapa atual."""
+    status_filtro = {"Pendentes": "pendente", "Em andamento": "andamento", "Finalizadas": "finalizado"}
+    return [
+        d for d in demandas
+        if (situacao == "Todas" or status_demanda(d)[0] == status_filtro.get(situacao))
+        and (etapa == "Todas" or _etapa_marcada(d.get("etapas", {}) or {}, etapa))
+    ]
+
+
 def _data_demanda(demanda):
     try:
         return datetime.datetime.strptime(str(demanda.get("data", "")), "%Y-%m-%d").date()
@@ -790,7 +598,7 @@ def mostrar_painel_alertas(alertas):
 
     with st.expander(
         f"🔔 Notificações importantes — {len(alertas)} aviso(s)",
-        expanded=bool(alertas),
+        expanded=False,
     ):
         if not alertas:
             st.success("Nenhuma novidade importante desde a última atualização da tela.")
@@ -812,10 +620,10 @@ def mostrar_painel_alertas(alertas):
                 f"""
                 <div class="alert-box {classe}">
                     <div class="alert-head">
-                        <div class="alert-title">{alerta["titulo"]}</div>
-                        <div class="alert-date">📅 {data_alerta}</div>
+                        <div class="alert-title">{escape(str(alerta["titulo"]))}</div>
+                        <div class="alert-date">📅 {escape(data_alerta)}</div>
                     </div>
-                    <div class="alert-meta">{texto_alerta}</div>
+                    <div class="alert-meta">{escape(texto_alerta)}</div>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -830,8 +638,9 @@ def mostrar_painel_alertas(alertas):
 st.markdown(
     """
     <div class="main-header">
-        <div class="main-title">ECO DECOR<br><span style="font-size:0.92em; color:#166534;">DEMANDA DIÁRIA</span></div>
-        <div class="main-subtitle">Painel otimizado para produção, etiquetas, celular e acompanhamento de etapas.</div>
+        <div class="eyebrow">ECODECOR · PRODUÇÃO</div>
+        <div class="main-title">Controle de demandas</div>
+        <div class="main-subtitle">Acompanhe os pedidos, confira as etapas e prepare as etiquetas.</div>
     </div>
     """,
     unsafe_allow_html=True,
@@ -878,31 +687,12 @@ if st.session_state.modo_demanda == "lista":
     with st.spinner("Carregando demandas do dia..."):
         demandas_do_dia = carregar_demandas_data(data_str)
 
-    pendentes = 0
-    andamento = 0
-    finalizadas = 0
-    for d in demandas_do_dia:
-        classe, _, _ = status_demanda(d)
-        if classe == "pendente":
-            pendentes += 1
-        elif classe == "andamento":
-            andamento += 1
-        else:
-            finalizadas += 1
-
-    m1, m2, m3, m4, m5 = st.columns(5)
-    m1.markdown(f"<div class='metric-card'><div class='metric-label'>Demandas</div><div class='metric-value'>{len(demandas_do_dia)}</div></div>", unsafe_allow_html=True)
-    m2.markdown(f"<div class='metric-card'><div class='metric-label'>Quadros</div><div class='metric-value'>{total_quadros(demandas_do_dia)}</div></div>", unsafe_allow_html=True)
-    m3.markdown(f"<div class='metric-card'><div class='metric-label'>Caixas</div><div class='metric-value'>{total_caixas(demandas_do_dia)}</div></div>", unsafe_allow_html=True)
-    m4.markdown(f"<div class='metric-card'><div class='metric-label'>Em andamento</div><div class='metric-value'>{andamento}</div></div>", unsafe_allow_html=True)
-    m5.markdown(f"<div class='metric-card'><div class='metric-label'>Finalizadas</div><div class='metric-value'>{finalizadas}</div></div>", unsafe_allow_html=True)
-
     alertas_do_dia = gerar_alertas_demandas(demandas_do_dia, st.session_state.data_foco)
     mostrar_painel_alertas(alertas_do_dia)
 
     st.write("")
     topo1, topo2, topo3 = st.columns([1.2, 1.2, 1.2])
-    if topo1.button("➕ Nova demanda", use_container_width=True):
+    if topo1.button("➕ Nova demanda", type="primary", use_container_width=True):
         st.session_state.modo_demanda = "nova"
         st.session_state.itens_temp = []
         st.session_state.demanda_edit = None
@@ -913,26 +703,57 @@ if st.session_state.modo_demanda == "lista":
 
     itens_por_pagina = topo3.selectbox("Cards por página", [5, 10, 15, 20, 30], index=1, label_visibility="collapsed")
 
-    busca_demanda = st.text_input(
-        "🔎 Buscar demanda",
-        placeholder="Digite NF, cliente, medida ou referência. Ex: 89",
-        key="busca_demanda",
-    )
+    with st.container(border=True):
+        busca_demanda = st.text_input(
+            "🔎 Buscar demanda",
+            placeholder="NF, cliente, medida ou referência",
+            key="busca_demanda",
+        ).strip()
+        filtro1, filtro2 = st.columns(2)
+        situacao = filtro1.selectbox("Situação", ["Todas", "Pendentes", "Em andamento", "Finalizadas"], key="filtro_situacao")
+        etapa = filtro2.selectbox("Etapa concluída", ["Todas"] + ETAPAS_PRODUCAO, key="filtro_etapa")
+        st.caption("Etapa concluída filtra as etapas já marcadas; não indica qual trabalho deve ser feito agora.")
+
     if busca_demanda:
-        demandas_filtradas = buscar_demandas_geral(busca_demanda, data_str)
+        demandas_base = buscar_demandas_geral(busca_demanda, data_str)
     else:
-        demandas_filtradas = demandas_do_dia
+        demandas_base = demandas_do_dia
+    demandas_filtradas = filtrar_por_producao(demandas_base, situacao, etapa)
+    lista_filtrada = bool(busca_demanda) or situacao != "Todas" or etapa != "Todas"
 
     if busca_demanda:
         st.caption(
-            f"Encontradas {len(demandas_filtradas)} demanda(s) para: {busca_demanda}. "
-            "A busca olha NF, cliente, referência, agendamento e datas próximas."
+            f"Resumo dos resultados da busca: {len(demandas_filtradas)} de {len(demandas_base)} demanda(s). "
+            "A busca inclui outras datas, retorna até 80 resultados e procura medidas nas datas próximas. "
+            "O TXT geral continua sendo somente do dia selecionado."
         )
-    st.session_state.pagina_atual = 1 if busca_demanda else st.session_state.pagina_atual
+    else:
+        st.caption(f"Resumo de {data_label} · {len(demandas_filtradas)} de {len(demandas_do_dia)} demanda(s), conforme os filtros.")
+
+    # Reinicia a página apenas quando a pesquisa muda, não em todo clique.
+    contexto_lista = (data_str, busca_demanda, situacao, etapa, itens_por_pagina)
+    if st.session_state.get("contexto_lista") != contexto_lista:
+        st.session_state.pagina_atual = 1
+        st.session_state.contexto_lista = contexto_lista
+
+    contagens = {"pendente": 0, "andamento": 0, "finalizado": 0}
+    for demanda in demandas_filtradas:
+        contagens[status_demanda(demanda)[0]] += 1
+    indicadores = [
+        ("Demandas", len(demandas_filtradas)), ("Quadros", total_quadros(demandas_filtradas)),
+        ("Caixas", total_caixas(demandas_filtradas)), ("Pendentes", contagens["pendente"]),
+        ("Em andamento", contagens["andamento"]), ("Finalizadas", contagens["finalizado"]),
+    ]
+    st.markdown("<div class='metric-grid'>" + "".join(
+        f"<div class='metric-card'><div class='metric-label'>{rotulo}</div><div class='metric-value'>{valor}</div></div>"
+        for rotulo, valor in indicadores
+    ) + "</div>", unsafe_allow_html=True)
+    if lista_filtrada:
+        st.caption("Para reordenar demandas, limpe a busca e deixe os dois filtros em Todas.")
 
     if st.session_state.mostrar_txt_geral and demandas_do_dia:
         conteudo_massa = gerar_txt_etiquetas(demandas_do_dia, data_label=data_label)
-        with st.expander("Preview do TXT geral de etiquetas", expanded=True):
+        with st.expander(f"Preview do TXT geral de etiquetas — {data_label}", expanded=True):
             st.code(conteudo_massa[:4000] + ("\n..." if len(conteudo_massa) > 4000 else ""), language="text")
             st.download_button(
                 "📥 Baixar todas as etiquetas do dia",
@@ -944,10 +765,11 @@ if st.session_state.modo_demanda == "lista":
 
     st.divider()
 
-    if not demandas_do_dia:
-        st.info(f"Nenhuma demanda para {data_label}.")
-    elif not demandas_filtradas:
-        st.warning("Nenhuma demanda encontrada com essa busca.")
+    if not demandas_filtradas:
+        if not demandas_base and not busca_demanda:
+            st.info(f"Nenhuma demanda para {data_label}.")
+        else:
+            st.info("Nenhuma demanda encontrada com a busca e os filtros atuais.")
     else:
         total_paginas = max(1, math.ceil(len(demandas_filtradas) / itens_por_pagina))
         st.session_state.pagina_atual = min(max(1, st.session_state.pagina_atual), total_paginas)
@@ -971,78 +793,78 @@ if st.session_state.modo_demanda == "lista":
             itens = d.get("itens", []) or []
             medidas_str = " | ".join([f"{it.get('qtd', 0)}x {it.get('tam', '')}" for it in itens])
 
-            st.markdown("<div class='demand-card'>", unsafe_allow_html=True)
-            col_a, col_b = st.columns([3, 1])
-            with col_a:
-                st.markdown(f"<div class='demand-title'>{d.get('cliente', '')}</div>", unsafe_allow_html=True)
-                data_card = d.get("data", data_str)
-                st.markdown(f"<div class='demand-meta'>NF: <b>{d.get('nf', '')}</b> • {medidas_str}</div>", unsafe_allow_html=True)
-                st.markdown(f"<span class='status-badge {classe}'>{icone} {marcadas}/{len(ETAPAS_PRODUCAO)}</span>", unsafe_allow_html=True)
-            with col_b:
-                data_formatada = data_card
-                try:
-                    data_formatada = datetime.datetime.strptime(str(data_card), "%Y-%m-%d").strftime("%d/%m/%Y")
-                except Exception:
-                    pass
-                st.markdown(f"<div style='text-align:right;'><span class='date-badge'>📅 {data_formatada}</span></div>", unsafe_allow_html=True)
-                if st.button("📄 Etiquetas", key=f"etq_{d['id']}"):
-                    st.session_state.demanda_etiqueta = d
-                    st.session_state.modo_demanda = "etiquetas"
-                    st.rerun()
-
-            with st.expander("Abrir detalhes e etapas", expanded=False):
-                cinfo1, cinfo2 = st.columns([1, 1])
-                with cinfo1:
-                    st.markdown("**📦 Medidas e caixas**")
-                    for it in itens:
-                        try:
-                            tam = it.get("tam", "")
-                            qtd = int(it.get("qtd", 0))
-                            cap = obter_capacidade(d.get("cliente", ""), tam)
-                            caixas = math.ceil(qtd / cap)
-                            st.markdown(f"- **{tam}** — {qtd} un — **{caixas} caixa(s)** *(cap. {cap}/cx)*")
-                        except Exception:
-                            st.markdown(f"- {it}")
-                    if d.get("agendamento"):
-                        st.markdown(f"📅 **Agendamento:** {d.get('agendamento')}")
-                    if d.get("referencia"):
-                        st.markdown(f"📝 **Referência:** {d.get('referencia')}")
-
-                with cinfo2:
-                    st.markdown("**⚙️ Ações**")
-                    b1, b2 = st.columns(2)
-                    if b1.button("✏️ Editar", key=f"ed_{d['id']}"):
-                        st.session_state.modo_demanda = "editar"
-                        st.session_state.demanda_edit = d
-                        st.session_state.itens_temp = itens.copy() if isinstance(itens, list) else []
+            with st.container(border=True, key=f"card_demanda_{d['id']}"):
+                rotulo_status = {"pendente": "Pendente", "andamento": "Em andamento", "finalizado": "Finalizada"}[classe]
+                col_a, col_b = st.columns([3, 1])
+                with col_a:
+                    st.markdown(f"<div class='demand-title'>{escape(str(d.get('cliente', '')))}</div>", unsafe_allow_html=True)
+                    data_card = d.get("data", data_str)
+                    st.markdown(f"<div class='demand-meta'>NF: <b>{escape(str(d.get('nf', '')))}</b> • {escape(medidas_str)}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<span class='status-badge {classe}'>{icone} {rotulo_status} · {marcadas}/{len(ETAPAS_PRODUCAO)}</span>", unsafe_allow_html=True)
+                with col_b:
+                    data_formatada = data_card
+                    try:
+                        data_formatada = datetime.datetime.strptime(str(data_card), "%Y-%m-%d").strftime("%d/%m/%Y")
+                    except Exception:
+                        pass
+                    st.markdown(f"<div style='text-align:right;'><span class='date-badge'>📅 {escape(str(data_formatada))}</span></div>", unsafe_allow_html=True)
+                    if st.button("📄 Etiquetas", key=f"etq_{d['id']}"):
+                        st.session_state.demanda_etiqueta = d
+                        st.session_state.modo_demanda = "etiquetas"
                         st.rerun()
-                    if b2.button("🗑️ Excluir", key=f"del_{d['id']}"):
-                        excluir_demanda(d)
 
-                    b3, b4 = st.columns(2)
-                    if b3.button("⬆️ Subir", key=f"up_{d['id']}", disabled=idx_global <= 0):
-                        mover_demanda(d, demandas_do_dia[idx_global - 1], idx_global, idx_global - 1)
-                    if b4.button("⬇️ Descer", key=f"down_{d['id']}", disabled=idx_global >= len(demandas_do_dia) - 1):
-                        mover_demanda(d, demandas_do_dia[idx_global + 1], idx_global, idx_global + 1)
+                with st.expander("Abrir detalhes e etapas", expanded=False):
+                    cinfo1, cinfo2 = st.columns([1, 1])
+                    with cinfo1:
+                        st.markdown("**📦 Medidas e caixas**")
+                        for it in itens:
+                            try:
+                                tam = it.get("tam", "")
+                                qtd = int(it.get("qtd", 0))
+                                cap = obter_capacidade(d.get("cliente", ""), tam)
+                                caixas = math.ceil(qtd / cap)
+                                st.markdown(f"- **{tam}** — {qtd} un — **{caixas} caixa(s)** *(cap. {cap}/cx)*")
+                            except Exception:
+                                st.markdown(f"- {it}")
+                        if d.get("agendamento"):
+                            st.markdown(f"📅 **Agendamento:** {d.get('agendamento')}")
+                        if d.get("referencia"):
+                            st.markdown(f"📝 **Referência:** {d.get('referencia')}")
 
-                st.write("---")
-                with st.form(key=f"form_etapas_{d['id']}"):
-                    st.markdown("**✅ Etapas da produção**")
-                    etapas_atuais = d.get("etapas", {}) or {}
-                    novas_etapas = {}
-                    cols_etapas = st.columns(3)
-                    for i, etapa in enumerate(ETAPAS_PRODUCAO):
-                        with cols_etapas[i % 3]:
-                            novas_etapas[etapa] = st.checkbox(etapa, value=_etapa_marcada(etapas_atuais, etapa), key=f"chk_{d['id']}_{i}")
-                    if st.form_submit_button("💾 Salvar etapas"):
-                        try:
-                            supabase.table("demandas").update({"etapas": novas_etapas}).eq("id", d["id"]).execute()
-                            limpar_cache()
-                            st.success("Etapas salvas.")
+                    with cinfo2:
+                        st.markdown("**⚙️ Ações**")
+                        b1, b2 = st.columns(2)
+                        if b1.button("✏️ Editar", key=f"ed_{d['id']}"):
+                            st.session_state.modo_demanda = "editar"
+                            st.session_state.demanda_edit = d
+                            st.session_state.itens_temp = itens.copy() if isinstance(itens, list) else []
                             st.rerun()
-                        except Exception as e:
-                            st.error(f"Erro ao salvar etapas: {e}")
-            st.markdown("</div>", unsafe_allow_html=True)
+                        if b2.button("🗑️ Excluir", key=f"del_{d['id']}"):
+                            excluir_demanda(d)
+
+                        b3, b4 = st.columns(2)
+                        if b3.button("⬆️ Subir", key=f"up_{d['id']}", disabled=lista_filtrada or idx_global <= 0):
+                            mover_demanda(d, demandas_do_dia[idx_global - 1], idx_global, idx_global - 1)
+                        if b4.button("⬇️ Descer", key=f"down_{d['id']}", disabled=lista_filtrada or idx_global >= len(demandas_do_dia) - 1):
+                            mover_demanda(d, demandas_do_dia[idx_global + 1], idx_global, idx_global + 1)
+
+                    st.write("---")
+                    with st.form(key=f"form_etapas_{d['id']}"):
+                        st.markdown("**✅ Etapas da produção**")
+                        etapas_atuais = d.get("etapas", {}) or {}
+                        novas_etapas = {}
+                        cols_etapas = st.columns(3)
+                        for i, etapa in enumerate(ETAPAS_PRODUCAO):
+                            with cols_etapas[i % 3]:
+                                novas_etapas[etapa] = st.checkbox(etapa, value=_etapa_marcada(etapas_atuais, etapa), key=f"chk_{d['id']}_{i}")
+                        if st.form_submit_button("💾 Salvar etapas"):
+                            try:
+                                supabase.table("demandas").update({"etapas": novas_etapas}).eq("id", d["id"]).execute()
+                                limpar_cache()
+                                st.success("Etapas salvas.")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erro ao salvar etapas: {e}")
 
 # ==============================================================================
 # 📄 MODO ETIQUETAS
@@ -1092,9 +914,11 @@ elif st.session_state.modo_demanda in ["nova", "editar"]:
             st.text_input("Nome do cliente:", value=cli_d, disabled=True)
         else:
             cli_d = st.text_input("Nome do cliente:", value=cliente_atual).strip().upper()
-        nf_d = st.text_input("Número da NF:", value=d_edit.get("nf", "")).strip().upper()
-        txt_agend = st.text_input("Agendamento:", value=d_edit.get("agendamento", "")).strip().upper()
+        col_nf, col_agendamento = st.columns(2)
+        nf_d = col_nf.text_input("Número da NF:", value=d_edit.get("nf", "")).strip().upper()
+        txt_agend = col_agendamento.text_input("Agendamento:", value=d_edit.get("agendamento", "")).strip().upper()
         txt_ref = st.text_area("Referência:", value=d_edit.get("referencia", "")).strip().upper()
+        st.caption("Adicione as medidas abaixo e confira os itens antes de salvar a demanda.")
 
         st.write("---")
         st.markdown("**📦 Itens adicionados**")
@@ -1162,6 +986,9 @@ elif st.session_state.modo_demanda in ["nova", "editar"]:
                     st.rerun()
                 except Exception as e:
                     st.error(f"Erro ao salvar: {e}")
+
+st.caption("Ecodecor · Demandas · versão 2026.10.16-interface-verde")
+
 
 
 
