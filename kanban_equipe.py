@@ -9,7 +9,7 @@ from html import escape
 from supabase import create_client, Client
 
 # ==============================================================================
-# ECO DECOR - DEMANDA DIÁRIA | 2026.10.16-interface-verde
+# ECO DECOR - DEMANDA DIÁRIA | 2026.10.19-contraste-sombras
 # Melhorias focadas em velocidade + uso no celular:
 # - Busca apenas a data selecionada no Supabase
 # - Cache curto da data atual
@@ -30,24 +30,31 @@ st.set_page_config(
 st.markdown("""
 <style>
     :root { color-scheme: light; }
-    .stApp { background: #f4f7f5; color: #17251e; }
-    [data-testid="stHeader"] { background: rgba(244,247,245,.96); }
+    .stApp { background: #e5ede8; color: #17251e; }
+    [data-testid="stHeader"] { background: rgba(229,237,232,.96); }
     .block-container { max-width: 1440px; padding: 4rem 2rem 3rem; }
     h1, h2, h3, h4, [data-testid="stWidgetLabel"] p { color: #17251e !important; }
     [data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p {
         color: #4b6054 !important; font-size: 14px; }
-    .main-header { background: white; border: 1px solid #d6e5db; border-left: 5px solid #16824a;
-        border-radius: 16px; padding: 24px 28px; margin-bottom: 12px; }
+    .main-header { background: linear-gradient(120deg, #ffffff, #edf6ef); border: 1px solid #c2d6c9; border-left: 5px solid #16824a;
+        border-radius: 16px; padding: 24px 28px; margin-bottom: 12px;
+        box-shadow: 0 5px 16px rgba(25,64,42,.09); }
     .eyebrow { color: #197142; font-size: 12px; font-weight: 800; letter-spacing: .1em; }
     .main-title { font-size: clamp(25px, 3vw, 34px); font-weight: 800; margin: 5px 0; color: #14291d; }
     .main-subtitle { color: #4b6054; font-size: 15px; line-height: 1.5; }
     .metric-grid { display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); gap: 12px; margin: 8px 0 20px; }
-    .metric-card { background: white; border: 1px solid #d6e5db; border-top: 3px solid #24915a;
-        border-radius: 12px; padding: 14px 16px; }
+    .metric-card { background: #fbfdfb; border: 1px solid #c2d6c9; border-top: 3px solid #24915a;
+        border-radius: 12px; padding: 14px 16px;
+        box-shadow: 0 5px 14px rgba(25,64,42,.11), 0 1px 3px rgba(25,64,42,.05); }
     .metric-label { color: #465d4f; font-size: 13px; font-weight: 600; }
     .metric-value { color: #145c35; font-size: 28px; font-weight: 800; margin-top: 3px; }
     [class*="st-key-card_demanda_"] { background: white; border-color: #cfdfd4 !important;
-        border-left: 4px solid #24915a !important; border-radius: 14px; padding: 16px !important; }
+        border-left: 4px solid #24915a !important; border-radius: 14px; padding: 16px !important;
+        box-shadow: 0 6px 18px rgba(25,64,42,.12), 0 1px 3px rgba(25,64,42,.06); }
+    .st-key-filtros_producao { background: #f0f6f2; border-color: #bfd4c6 !important;
+        box-shadow: 0 4px 12px rgba(25,64,42,.09); }
+    .st-key-cadastro_demanda { background: #f8fcf9; border-color: #bfd4c6 !important;
+        box-shadow: 0 6px 18px rgba(25,64,42,.11); }
     .demand-title { font-size: 19px; line-height: 1.4; font-weight: 750; color: #17251e; overflow-wrap: anywhere; }
     .demand-meta { color: #42584a; font-size: 14px; margin: 5px 0; overflow-wrap: anywhere; }
     .date-badge { display: inline-block; background: #edf7f0; color: #185d37; padding: 6px 10px;
@@ -77,7 +84,8 @@ st.markdown("""
     [data-baseweb="input"]:focus-within, [data-baseweb="select"] > div:focus-within, textarea:focus {
         border-color: #167344 !important; box-shadow: 0 0 0 2px #d8eddf !important; }
     [data-testid="stExpander"], [data-testid="stForm"] {
-        background: white; border: 1px solid #cfdfd4; border-radius: 10px; box-shadow: none; }
+        background: #fbfdfb; border: 1px solid #c2d6c9; border-radius: 10px;
+        box-shadow: 0 2px 7px rgba(25,64,42,.07); }
     [data-testid="stExpander"] summary { color: #234b32; font-weight: 650; }
     [data-testid="stForm"] { padding: 16px; }
     .alert-box { border: 1px solid #d6e5db; border-left: 4px solid #24915a;
@@ -703,7 +711,7 @@ if st.session_state.modo_demanda == "lista":
 
     itens_por_pagina = topo3.selectbox("Cards por página", [5, 10, 15, 20, 30], index=1, label_visibility="collapsed")
 
-    with st.container(border=True):
+    with st.container(border=True, key="filtros_producao"):
         busca_demanda = st.text_input(
             "🔎 Buscar demanda",
             placeholder="NF, cliente, medida ou referência",
@@ -900,7 +908,7 @@ elif st.session_state.modo_demanda in ["nova", "editar"]:
     d_edit = st.session_state.demanda_edit if is_edit and st.session_state.demanda_edit else {}
     st.markdown(f"### {'✏️ Editar demanda' if is_edit else '➕ Nova demanda'}")
 
-    with st.container(border=True):
+    with st.container(border=True, key="cadastro_demanda"):
         st.markdown("**📝 Dados principais**")
         cliente_atual = str(d_edit.get("cliente", "") or "").strip().upper()
         tipo_cliente = st.radio(
@@ -987,7 +995,7 @@ elif st.session_state.modo_demanda in ["nova", "editar"]:
                 except Exception as e:
                     st.error(f"Erro ao salvar: {e}")
 
-st.caption("Ecodecor · Demandas · versão 2026.10.16-interface-verde")
+st.caption("Ecodecor · Demandas · versão 2026.10.19-contraste-sombras")
 
 
 
