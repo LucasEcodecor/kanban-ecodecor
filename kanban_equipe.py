@@ -9,7 +9,7 @@ from html import escape
 from supabase import create_client, Client
 
 # ==============================================================================
-# ECO DECOR - DEMANDA DIÁRIA | 2026.10.19-contraste-sombras
+# ECO DECOR - DEMANDA DIÁRIA | 2026.10.19-data-no-card
 # Melhorias focadas em velocidade + uso no celular:
 # - Busca apenas a data selecionada no Supabase
 # - Cache curto da data atual
@@ -72,6 +72,11 @@ st.markdown("""
         background: #167344 !important; border: 1px solid #167344 !important; color: white !important; }
     button[kind="primary"] p, button[kind="primaryFormSubmit"] p, .stDownloadButton button p { color: white !important; }
     .stButton button:hover { border-color: #167344 !important; box-shadow: 0 0 0 2px #d8eddf; }
+    [class*="st-key-popover_data_"] button[data-testid="stPopoverButton"] {
+        background: #edf7f0 !important; color: #185d37 !important;
+        border: 1px solid #c9e4d3 !important; border-radius: 7px;
+        min-height: 36px; font-size: 13px;
+    }
     button:disabled { opacity: .42; box-shadow: none !important; }
     [data-testid="stTextInput"] label, [data-testid="stTextArea"] label,
     [data-testid="stNumberInput"] label, [data-testid="stSelectbox"] label,
@@ -351,6 +356,30 @@ def voltar_lista():
     st.session_state.demanda_etiqueta = None
     st.session_state.itens_temp = []
     st.session_state.mostrar_txt_geral = False
+
+
+def cancelar_data_card(demanda_id):
+    """Fecha o calendário e descarta a escolha, sem gravar na demanda."""
+    st.session_state.pop(f"data_card_{demanda_id}", None)
+    st.session_state[f"popover_data_{demanda_id}"] = False
+    st.session_state.pop(f"erro_data_card_{demanda_id}", None)
+
+
+def salvar_data_card(demanda_id):
+    """Atualiza somente a data do ID escolhido; não regrava itens ou etapas."""
+    nova_data = st.session_state.get(f"data_card_{demanda_id}")
+    if not isinstance(nova_data, datetime.date):
+        st.session_state[f"erro_data_card_{demanda_id}"] = "Escolha uma data antes de salvar."
+        return
+    try:
+        supabase.table("demandas").update({"data": nova_data.isoformat()}).eq("id", demanda_id).execute()
+    except Exception as e:
+        st.session_state[f"erro_data_card_{demanda_id}"] = f"Erro ao alterar a data: {e}"
+        return
+    limpar_cache()
+    st.session_state.data_foco = nova_data
+    st.session_state.pagina_atual = 1
+    cancelar_data_card(demanda_id)
 
 
 def mover_demanda(d_atual, d_alvo, idx_atual, idx_alvo):
@@ -815,7 +844,28 @@ if st.session_state.modo_demanda == "lista":
                         data_formatada = datetime.datetime.strptime(str(data_card), "%Y-%m-%d").strftime("%d/%m/%Y")
                     except Exception:
                         pass
-                    st.markdown(f"<div style='text-align:right;'><span class='date-badge'>📅 {escape(str(data_formatada))}</span></div>", unsafe_allow_html=True)
+                    editor_data = st.popover(
+                        f"📅 {data_formatada}",
+                        key=f"popover_data_{d['id']}",
+                        on_change="rerun",
+                        help="Clique para alterar a data desta demanda.",
+                    )
+                    if editor_data.open:
+                        with editor_data:
+                            st.markdown("**Alterar data da demanda**")
+                            st.caption(f"{d.get('cliente', '')} · NF {d.get('nf', '')}")
+                            data_original = _data_demanda(d) or st.session_state.data_foco
+                            st.date_input("Nova data:", value=data_original,
+                                          format="DD/MM/YYYY", key=f"data_card_{d['id']}")
+                            st.caption("A demanda só muda de dia ao clicar em Salvar data.")
+                            erro_data = st.session_state.get(f"erro_data_card_{d['id']}")
+                            if erro_data:
+                                st.error(erro_data)
+                            salvar_data, cancelar_data = st.columns(2)
+                            salvar_data.button("Salvar data", key=f"salvar_data_card_{d['id']}",
+                                               type="primary", on_click=salvar_data_card, args=(d['id'],))
+                            cancelar_data.button("Cancelar", key=f"cancelar_data_card_{d['id']}",
+                                                 on_click=cancelar_data_card, args=(d['id'],))
                     if st.button("📄 Etiquetas", key=f"etq_{d['id']}"):
                         st.session_state.demanda_etiqueta = d
                         st.session_state.modo_demanda = "etiquetas"
@@ -1008,4 +1058,4 @@ elif st.session_state.modo_demanda in ["nova", "editar"]:
                 except Exception as e:
                     st.error(f"Erro ao salvar: {e}")
 
-st.caption("Ecodecor · Demandas · versão 2026.10.19-editar-data")
+st.caption("Ecodecor · Demandas · versão 2026.10.19-data-no-card")
