@@ -910,6 +910,15 @@ elif st.session_state.modo_demanda in ["nova", "editar"]:
 
     with st.container(border=True, key="cadastro_demanda"):
         st.markdown("**📝 Dados principais**")
+        data_demanda = st.session_state.data_foco
+        if is_edit:
+            data_demanda = st.date_input(
+                "Data da demanda:",
+                value=_data_demanda(d_edit) or st.session_state.data_foco,
+                format="DD/MM/YYYY",
+                key=f"editar_data_demanda_{d_edit['id']}",
+                help="Ao salvar, a demanda será transferida para o dia escolhido, mantendo itens e etapas.",
+            )
         cliente_atual = str(d_edit.get("cliente", "") or "").strip().upper()
         tipo_cliente = st.radio(
             "Tipo de cliente:",
@@ -972,9 +981,11 @@ elif st.session_state.modo_demanda in ["nova", "editar"]:
                 st.error("⚠️ Esta NF já existe. Corrija antes de salvar.")
             elif not cli_d or not nf_d or len(st.session_state.itens_temp) == 0:
                 st.warning("⚠️ Preencha cliente, NF e adicione pelo menos uma medida.")
+            elif data_demanda is None:
+                st.warning("⚠️ Escolha a data da demanda antes de salvar.")
             else:
                 dados = {
-                    "data": d_edit.get("data", data_str) if is_edit else data_str,
+                    "data": data_demanda.isoformat(),
                     "cliente": cli_d,
                     "nf": nf_d,
                     "itens": st.session_state.itens_temp,
@@ -989,15 +1000,12 @@ elif st.session_state.modo_demanda in ["nova", "editar"]:
                         dados["ordem"] = 999
                         supabase.table("demandas").insert(dados).execute()
                     limpar_cache()
+                    if is_edit:
+                        st.session_state.data_foco = data_demanda
                     voltar_lista()
                     st.success("Demanda salva.")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Erro ao salvar: {e}")
 
-st.caption("Ecodecor · Demandas · versão 2026.10.19-contraste-sombras")
-
-
-
-
-
+st.caption("Ecodecor · Demandas · versão 2026.10.19-editar-data")
